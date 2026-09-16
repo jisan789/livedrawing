@@ -178,6 +178,9 @@ class WebRTCManager {
 
       case 'peer_joined':
         this.onPeerJoined(msg);
+        if (msg.user_id !== this.userId && !this.peers.has(msg.user_id)) {
+          this.createPeerConnection(msg.user_id, true);
+        }
         break;
 
       case 'peer_left':

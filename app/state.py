@@ -59,16 +59,20 @@ class BoardState:
 
     def start_stroke(self, stroke_id: int, user_id: str, tool: int, color: str, size: float, x: int, y: int) -> Stroke:
         with self._lock:
+            if stroke_id in self.strokes:
+                return self.strokes[stroke_id]
             stroke = Stroke(stroke_id, user_id, tool, color, size, [[x, y]])
             self.strokes[stroke_id] = stroke
-            self.stroke_order.append(stroke_id)
+            if stroke_id not in self.stroke_order:
+                self.stroke_order.append(stroke_id)
             
             if user_id not in self.user_undo_stack:
                 self.user_undo_stack[user_id] = []
             if user_id not in self.user_redo_stack:
                 self.user_redo_stack[user_id] = []
             
-            self.user_undo_stack[user_id].append(stroke_id)
+            if stroke_id not in self.user_undo_stack[user_id]:
+                self.user_undo_stack[user_id].append(stroke_id)
             self.user_redo_stack[user_id].clear()
             return stroke
 
@@ -202,7 +206,15 @@ class BoardState:
                     stroke.is_undone = s_dict.get("undone", False)
                     self.strokes[sid] = stroke
 
-                self.stroke_order = [int(sid) for sid in data.get("stroke_order", [])]
+                raw_order = data.get("stroke_order", [])
+                seen = set()
+                clean_order = []
+                for sid in raw_order:
+                    sid_int = int(sid)
+                    if sid_int not in seen and sid_int in self.strokes:
+                        seen.add(sid_int)
+                        clean_order.append(sid_int)
+                self.stroke_order = clean_order
                 self.user_undo_stack = data.get("user_undo_stack", {})
                 self.user_redo_stack = data.get("user_redo_stack", {})
 
