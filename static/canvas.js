@@ -39,6 +39,8 @@ class DrawingCanvas {
     this.refInitialState = null;
 
     // Viewport Navigation (Zoom & Pan)
+    this.minZoom = 1.0; // 100% minimum zoom, cannot zoom out less than 100%
+    this.maxZoom = 10.0; // 1000% maximum zoom
     this.zoom = 1.0;
     this.panX = 0;
     this.panY = 0;
@@ -111,6 +113,7 @@ class DrawingCanvas {
     this.activeCtx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.cursorCtx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
+    this.clampPan();
     this.redrawAll();
   }
 
@@ -140,9 +143,25 @@ class DrawingCanvas {
     this.brushSize = size;
   }
 
+  // Viewport Panning Boundary Constraint (Keeps canvas strictly fit without empty void)
+  clampPan() {
+    if (this.zoom <= this.minZoom) {
+      this.panX = 0;
+      this.panY = 0;
+      return;
+    }
+    const minPanX = this.width * (1 - this.zoom);
+    const maxPanX = 0;
+    const minPanY = this.height * (1 - this.zoom);
+    const maxPanY = 0;
+    this.panX = Math.min(maxPanX, Math.max(minPanX, this.panX));
+    this.panY = Math.min(maxPanY, Math.max(minPanY, this.panY));
+  }
+
   // Zoom & Pan API
   zoomAt(screenX, screenY, newZoom) {
-    const clampedZoom = Math.max(0.25, Math.min(10.0, newZoom));
+    // Minimum 100% (1.0), maximum 1000% (10.0)
+    const clampedZoom = Math.max(this.minZoom, Math.min(this.maxZoom, newZoom));
     const oldZoom = this.zoom;
     if (Math.abs(clampedZoom - oldZoom) < 0.001) return;
 
@@ -150,17 +169,20 @@ class DrawingCanvas {
     this.panX = screenX - (screenX - this.panX) * (clampedZoom / oldZoom);
     this.panY = screenY - (screenY - this.panY) * (clampedZoom / oldZoom);
     this.zoom = clampedZoom;
+    this.clampPan();
 
     this.onZoomChange(this.zoom, this.panX, this.panY);
     this.redrawAll();
   }
 
   zoomIn() {
-    this.zoomAt(this.width / 2, this.height / 2, this.zoom * 1.25);
+    if (this.zoom >= this.maxZoom) return;
+    this.zoomAt(this.width / 2, this.height / 2, Math.min(this.maxZoom, this.zoom * 1.25));
   }
 
   zoomOut() {
-    this.zoomAt(this.width / 2, this.height / 2, this.zoom / 1.25);
+    if (this.zoom <= this.minZoom) return;
+    this.zoomAt(this.width / 2, this.height / 2, Math.max(this.minZoom, this.zoom / 1.25));
   }
 
   resetZoom() {
@@ -410,10 +432,13 @@ class DrawingCanvas {
       const zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
       this.zoomAt(screenX, screenY, this.zoom * zoomFactor);
     } else {
-      this.panX -= e.deltaX;
-      this.panY -= e.deltaY;
-      this.onZoomChange(this.zoom, this.panX, this.panY);
-      this.redrawAll();
+      if (this.zoom > this.minZoom) {
+        this.panX -= e.deltaX;
+        this.panY -= e.deltaY;
+        this.clampPan();
+        this.onZoomChange(this.zoom, this.panX, this.panY);
+        this.redrawAll();
+      }
     }
   }
 
@@ -613,7 +638,7 @@ class DrawingCanvas {
 
       if (this.pinchStartDist > 0) {
         const scaleFactor = currDist / this.pinchStartDist;
-        const targetZoom = Math.max(0.25, Math.min(10.0, this.pinchStartZoom * scaleFactor));
+        const targetZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.pinchStartZoom * scaleFactor));
 
         const cX = this.pinchStartCenterLocal[0];
         const cY = this.pinchStartCenterLocal[1];
@@ -624,6 +649,7 @@ class DrawingCanvas {
         this.zoom = targetZoom;
         this.panX = newPanX;
         this.panY = newPanY;
+        this.clampPan();
         this.onZoomChange(this.zoom, this.panX, this.panY);
         this.redrawAll();
       }
@@ -632,12 +658,15 @@ class DrawingCanvas {
 
     // Handle 1-Finger Pan in Zoom/Hand Tool (tool === 3)
     if (this.tool === 3 && this.isPanning) {
-      const dx = e.clientX - this.panStartPointer[0];
-      const dy = e.clientY - this.panStartPointer[1];
-      this.panX = this.panStartOffset[0] + dx;
-      this.panY = this.panStartOffset[1] + dy;
-      this.onZoomChange(this.zoom, this.panX, this.panY);
-      this.redrawAll();
+      if (this.zoom > this.minZoom) {
+        const dx = e.clientX - this.panStartPointer[0];
+        const dy = e.clientY - this.panStartPointer[1];
+        this.panX = this.panStartOffset[0] + dx;
+        this.panY = this.panStartOffset[1] + dy;
+        this.clampPan();
+        this.onZoomChange(this.zoom, this.panX, this.panY);
+        this.redrawAll();
+      }
       return;
     }
 
@@ -860,6 +889,8 @@ class DrawingCanvas {
       if (this.activePointers.size < 2) {
         this.isPinching = false;
       }
+      this.clampPan();
+      this.onZoomChange(this.zoom, this.panX, this.panY);
       this.redrawAll();
       return;
     }
@@ -870,6 +901,9 @@ class DrawingCanvas {
       try {
         this.cursorCanvas.releasePointerCapture(e.pointerId);
       } catch (_) {}
+      this.clampPan();
+      this.onZoomChange(this.zoom, this.panX, this.panY);
+      this.redrawAll();
       return;
     }
 

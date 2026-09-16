@@ -334,6 +334,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       onZoomChange: (zoom, panX, panY) => {
         updateSelectionOverlay();
+        if (btnResetZoom) {
+          const pct = Math.round(zoom * 100);
+          const label = btnResetZoom.querySelector('.tool-label');
+          if (label) label.textContent = `${pct}%`;
+        }
       },
 
       onReferenceImageChange: (refImage) => {
@@ -614,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
       closeTrays();
       if (canvas) {
         canvas.resetZoom();
-        showToast('Zoom reset to 100%');
+        showToast('Canvas fit to 100%');
       }
     });
   }
@@ -720,7 +725,10 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (e.key === '-' || e.key === '_') {
       if (canvas) canvas.zoomOut();
     } else if (e.key === '0') {
-      if (canvas) canvas.resetZoom();
+      if (canvas) {
+        canvas.resetZoom();
+        showToast('Canvas fit to 100%');
+      }
     }
   });
 
