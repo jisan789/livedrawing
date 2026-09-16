@@ -37,6 +37,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const refOpacityLabel = document.getElementById('ref-opacity-label');
   const btnRefDelete = document.getElementById('btn-ref-delete');
 
+  // Live Chat Controls
+  const btnChatTrigger = document.getElementById('btn-chat-trigger');
+  const chatUnreadBadge = document.getElementById('chat-unread-badge');
+  const chatPanel = document.getElementById('chat-panel');
+  const btnCloseChat = document.getElementById('btn-close-chat');
+  const chatMessages = document.getElementById('chat-messages');
+  const chatForm = document.getElementById('chat-form');
+  const chatInput = document.getElementById('chat-input');
+  const btnSendChat = document.getElementById('btn-send-chat');
+
+  let unreadChatCount = 0;
+
   // Tool Buttons
   const toolPen = document.getElementById('tool-pen');
   const toolEraser = document.getElementById('tool-eraser');
@@ -132,6 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
       onPeerJoined: (msg) => {
         userCountDisplay.textContent = msg.user_count;
         showToast(`${msg.user_id} joined`);
+        appendSysChatMessage(`${msg.user_id} joined the board`);
       },
 
       onPeerLeft: (msg) => {
@@ -140,6 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
           canvas.removeRemoteUser(msg.user_id);
         }
         showToast(`${msg.user_id} left`);
+        appendSysChatMessage(`${msg.user_id} left`);
       },
 
       onPeerRenamed: (msg) => {
@@ -147,6 +161,11 @@ document.addEventListener('DOMContentLoaded', () => {
           canvas.removeRemoteUser(msg.old_user_id);
         }
         showToast(`${msg.old_user_id} is now ${msg.new_user_id}`);
+        appendSysChatMessage(`${msg.old_user_id} renamed to ${msg.new_user_id}`);
+      },
+
+      onChatMessage: (msg) => {
+        appendChatMessage(msg);
       },
 
       onBinaryMessage: (arrayBuffer) => {
@@ -641,6 +660,105 @@ document.addEventListener('DOMContentLoaded', () => {
       toast.style.opacity = '0';
       setTimeout(() => toast.remove(), 250);
     }, 2000);
+  }
+
+  // =========================================================================
+  // Live Chat Helper Functions & Handlers
+  // =========================================================================
+
+  function appendChatMessage(msg) {
+    if (!chatMessages) return;
+
+    const isMe = msg.user_id === currentUserId;
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `chat-msg-item ${isMe ? 'is-me' : ''}`;
+
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'chat-msg-header';
+
+    const dotSpan = document.createElement('span');
+    dotSpan.className = 'user-color-dot';
+    dotSpan.style.backgroundColor = msg.color || '#3b82f6';
+
+    const userSpan = document.createElement('span');
+    userSpan.className = 'chat-msg-user';
+    userSpan.textContent = isMe ? 'YOU' : msg.user_id;
+
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'chat-msg-time';
+    timeSpan.textContent = msg.time || '';
+
+    headerDiv.appendChild(dotSpan);
+    headerDiv.appendChild(userSpan);
+    headerDiv.appendChild(timeSpan);
+
+    const textDiv = document.createElement('div');
+    textDiv.className = 'chat-msg-text';
+    textDiv.textContent = msg.text;
+
+    msgDiv.appendChild(headerDiv);
+    msgDiv.appendChild(textDiv);
+    chatMessages.appendChild(msgDiv);
+
+    // Auto-scroll message list to latest message
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    // Unread counter management when chat panel is closed
+    if (chatPanel && chatPanel.classList.contains('hidden')) {
+      unreadChatCount++;
+      if (chatUnreadBadge) {
+        chatUnreadBadge.textContent = unreadChatCount > 9 ? '9+' : unreadChatCount;
+        chatUnreadBadge.classList.remove('hidden');
+      }
+    }
+  }
+
+  function appendSysChatMessage(text) {
+    if (!chatMessages) return;
+    const sysDiv = document.createElement('div');
+    sysDiv.className = 'chat-sys-msg';
+    sysDiv.textContent = text;
+    chatMessages.appendChild(sysDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  if (btnChatTrigger && chatPanel) {
+    btnChatTrigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isHidden = chatPanel.classList.contains('hidden');
+      closeTrays();
+      if (isHidden) {
+        chatPanel.classList.remove('hidden');
+        unreadChatCount = 0;
+        if (chatUnreadBadge) chatUnreadBadge.classList.add('hidden');
+        if (chatInput) setTimeout(() => chatInput.focus(), 150);
+      } else {
+        chatPanel.classList.add('hidden');
+      }
+    });
+  }
+
+  if (btnCloseChat && chatPanel) {
+    btnCloseChat.addEventListener('click', () => {
+      chatPanel.classList.add('hidden');
+    });
+  }
+
+  if (chatForm && chatInput) {
+    chatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = chatInput.value.trim();
+      if (!text || !net) return;
+      net.sendChatMessage(text);
+      chatInput.value = '';
+    });
+  }
+
+  // Prevent canvas interactions while clicking inside chat panel
+  if (chatPanel) {
+    chatPanel.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
   }
 
   // Initialize defaults

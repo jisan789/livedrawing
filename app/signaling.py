@@ -292,6 +292,23 @@ class SignalingHub:
                     except Exception:
                         pass
 
+            elif mtype == "chat_message":
+                text = str(msg.get("text") or "").strip()[:300]
+                if text and current_sender_id in self.active_peers:
+                    sender_peer = self.active_peers[current_sender_id]
+                    chat_payload = json.dumps({
+                        "type": "chat_message",
+                        "user_id": current_sender_id,
+                        "color": sender_peer.color,
+                        "text": text,
+                        "time": msg.get("time") or "",
+                    })
+                    for p in self.active_peers.values():
+                        try:
+                            await p.websocket.send_text(chat_payload)
+                        except Exception:
+                            pass
+
             elif mtype == "ping":
                 pong_msg = json.dumps({
                     "type": "pong",

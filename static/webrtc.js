@@ -32,6 +32,7 @@ class WebRTCManager {
     this.onBoardClear = options.onBoardClear || (() => {});
     this.onStrokeMove = options.onStrokeMove || (() => {});
     this.onStatsUpdate = options.onStatsUpdate || (() => {});
+    this.onChatMessage = options.onChatMessage || (() => {});
 
     this.init();
   }
@@ -162,6 +163,10 @@ class WebRTCManager {
         this.onBoardClear();
         break;
 
+      case 'chat_message':
+        this.onChatMessage(msg);
+        break;
+
       case 'pong':
         if (msg.client_time) {
           const rtt = Math.round(performance.now() - msg.client_time);
@@ -169,6 +174,17 @@ class WebRTCManager {
         }
         break;
     }
+  }
+
+  sendChatMessage(text) {
+    if (!text || !text.trim()) return;
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    this.sendServerMessage({
+      type: 'chat_message',
+      text: text.trim(),
+      time: timeStr,
+    });
   }
 
   // =========================================================================

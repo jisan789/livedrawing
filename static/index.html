@@ -54,6 +54,17 @@
       </div>
 
       <div class="header-right">
+        <!-- Live Chat Trigger Button with Unread Badge -->
+        <button id="btn-chat-trigger" class="header-btn chat-trigger-btn" title="Open Live Chat" aria-label="Live Chat">
+          <div class="chat-icon-wrapper">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span id="chat-unread-badge" class="chat-unread-badge hidden">0</span>
+          </div>
+          <span class="header-btn-label">Chat</span>
+        </button>
+
         <!-- Minimal Combined Stats (Users & Ping) -->
         <div class="header-stat-pill" title="Connected Users & Latency">
           <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -241,6 +252,38 @@
           </div>
         </form>
       </div>
+    </div>
+
+    <!-- Floating Glassmorphic Chat Panel -->
+    <div id="chat-panel" class="chat-panel hidden">
+      <div class="chat-header">
+        <div class="chat-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>Live Chat</span>
+        </div>
+        <button id="btn-close-chat" class="chat-close-btn" aria-label="Close Chat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div id="chat-messages" class="chat-messages">
+        <div class="chat-sys-msg">Welcome to LiveDraw Chat!</div>
+      </div>
+
+      <form id="chat-form" class="chat-form" onsubmit="return false;">
+        <input type="text" id="chat-input" placeholder="Type a message..." maxlength="300" autocomplete="off">
+        <button type="submit" id="btn-send-chat" class="chat-send-btn" aria-label="Send Message">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </form>
     </div>
 
     <!-- Toast Notification Overlay -->
