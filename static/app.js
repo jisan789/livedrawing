@@ -29,6 +29,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const toolPen = document.getElementById('tool-pen');
   const toolEraser = document.getElementById('tool-eraser');
   const toolSelect = document.getElementById('tool-select');
+  const toolZoom = document.getElementById('tool-zoom');
+  const btnZoomIn = document.getElementById('btn-zoom-in');
+  const btnZoomOut = document.getElementById('btn-zoom-out');
+  const btnZoomReset = document.getElementById('btn-zoom-reset');
+  const zoomValueDisplay = document.getElementById('zoom-value-display');
   const btnColorTrigger = document.getElementById('btn-color-trigger');
   const btnSizeTrigger = document.getElementById('btn-size-trigger');
   const btnUndo = document.getElementById('btn-undo');
@@ -241,6 +246,13 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSelectionOverlay();
       },
 
+      onZoomChange: (zoom, panX, panY) => {
+        if (zoomValueDisplay) {
+          zoomValueDisplay.textContent = `${Math.round(zoom * 100)}%`;
+        }
+        updateSelectionOverlay();
+      },
+
       onCursorMove: (normX, normY, isDrawing) => {
         const buffer = Protocol.encodeCursorMove(currentUserId, normX, normY, isDrawing);
         net.broadcastBinary(buffer, true);
@@ -329,6 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
     toolPen.classList.toggle('active', toolIndex === 0);
     toolEraser.classList.toggle('active', toolIndex === 1);
     if (toolSelect) toolSelect.classList.toggle('active', toolIndex === 2);
+    if (toolZoom) toolZoom.classList.toggle('active', toolIndex === 3);
     updateSelectionOverlay();
     closeTrays();
   }
@@ -347,7 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    if (activeTool === 1) {
+    if (activeTool === 1 || activeTool === 3) {
       selectTool(0);
     }
   }
@@ -371,6 +384,12 @@ document.addEventListener('DOMContentLoaded', () => {
   toolPen.addEventListener('click', () => selectTool(0));
   toolEraser.addEventListener('click', () => selectTool(1));
   if (toolSelect) toolSelect.addEventListener('click', () => selectTool(2));
+  if (toolZoom) toolZoom.addEventListener('click', () => selectTool(3));
+
+  // Zoom Controls Widget
+  if (btnZoomIn) btnZoomIn.addEventListener('click', () => canvas && canvas.zoomIn());
+  if (btnZoomOut) btnZoomOut.addEventListener('click', () => canvas && canvas.zoomOut());
+  if (btnZoomReset) btnZoomReset.addEventListener('click', () => canvas && canvas.resetZoom());
 
   // Delete Selection Handler
   if (btnDeleteSelection) {
@@ -472,6 +491,14 @@ document.addEventListener('DOMContentLoaded', () => {
       selectTool(1);
     } else if (e.key.toLowerCase() === 's' || e.key.toLowerCase() === 'v') {
       selectTool(2);
+    } else if (e.key.toLowerCase() === 'h' || e.key.toLowerCase() === 'z') {
+      selectTool(3);
+    } else if (e.key === '=' || e.key === '+') {
+      if (canvas) canvas.zoomIn();
+    } else if (e.key === '-' || e.key === '_') {
+      if (canvas) canvas.zoomOut();
+    } else if (e.key === '0') {
+      if (canvas) canvas.resetZoom();
     }
   });
 

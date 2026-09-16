@@ -21,12 +21,27 @@ class DrawingCanvas {
     this.onStrokeMove = options.onStrokeMove || (() => {});
     this.onCursorMove = options.onCursorMove || (() => {});
     this.onSelectionChange = options.onSelectionChange || (() => {});
+    this.onZoomChange = options.onZoomChange || (() => {});
 
     // Drawing settings
-    this.tool = 0; // 0 = Pen, 1 = Eraser, 2 = Select
+    this.tool = 0; // 0 = Pen, 1 = Eraser, 2 = Select, 3 = Zoom/Pan
     this.color = '#1e1e1e';
     this.brushSize = 2;
     this.userId = options.userId || 'ME';
+
+    // Viewport Navigation (Zoom & Pan)
+    this.zoom = 1.0;
+    this.panX = 0;
+    this.panY = 0;
+    this.activePointers = new Map(); // pointerId -> { x, y }
+    this.isPanning = false;
+    this.isPinching = false;
+    this.pinchStartDist = 0;
+    this.pinchStartZoom = 1.0;
+    this.pinchStartPan = [0, 0];
+    this.pinchStartCenterLocal = [0, 0];
+    this.panStartPointer = [0, 0];
+    this.panStartOffset = [0, 0];
 
     // Local drawing state
     this.isDrawing = false;
@@ -97,7 +112,13 @@ class DrawingCanvas {
       this.isDraggingSelection = false;
       this.isResizing = false;
       this.isMarqueeSelecting = false;
+    }
+    if (tool === 3) {
+      this.cursorCanvas.style.cursor = 'grab';
+    } else if (tool === 2) {
       this.cursorCanvas.style.cursor = 'default';
+    } else {
+      this.cursorCanvas.style.cursor = 'crosshair';
     }
     this.redrawAll();
   }
@@ -110,20 +131,51 @@ class DrawingCanvas {
     this.brushSize = size;
   }
 
-  // Coordinate Conversion: Screen Pixels <-> Normalized 0..10000
+  // Zoom & Pan API
+  zoomAt(screenX, screenY, newZoom) {
+    const clampedZoom = Math.max(0.25, Math.min(5.0, newZoom));
+    const oldZoom = this.zoom;
+    if (Math.abs(clampedZoom - oldZoom) < 0.001) return;
+
+    // Pin the content under (screenX, screenY) during zoom
+    this.panX = screenX - (screenX - this.panX) * (clampedZoom / oldZoom);
+    this.panY = screenY - (screenY - this.panY) * (clampedZoom / oldZoom);
+    this.zoom = clampedZoom;
+
+    this.onZoomChange(this.zoom, this.panX, this.panY);
+    this.redrawAll();
+  }
+
+  zoomIn() {
+    this.zoomAt(this.width / 2, this.height / 2, this.zoom * 1.25);
+  }
+
+  zoomOut() {
+    this.zoomAt(this.width / 2, this.height / 2, this.zoom / 1.25);
+  }
+
+  resetZoom() {
+    this.zoom = 1.0;
+    this.panX = 0;
+    this.panY = 0;
+    this.onZoomChange(this.zoom, this.panX, this.panY);
+    this.redrawAll();
+  }
+
+  // Coordinate Conversion: Screen Pixels <-> Normalized 0..10000 (Respecting Pan & Zoom)
   toNormalized(clientX, clientY) {
     const rect = this.cursorCanvas.getBoundingClientRect();
     const px = clientX - rect.left;
     const py = clientY - rect.top;
-    const normX = Math.max(0, Math.min(COORD_SCALE, (px / rect.width) * COORD_SCALE));
-    const normY = Math.max(0, Math.min(COORD_SCALE, (py / rect.height) * COORD_SCALE));
+    const normX = Math.max(0, Math.min(COORD_SCALE, Math.round(((px - this.panX) / (this.width * this.zoom)) * COORD_SCALE)));
+    const normY = Math.max(0, Math.min(COORD_SCALE, Math.round(((py - this.panY) / (this.height * this.zoom)) * COORD_SCALE)));
     return [normX, normY];
   }
 
   toScreen(normX, normY) {
     return [
-      (normX / COORD_SCALE) * this.width,
-      (normY / COORD_SCALE) * this.height,
+      this.panX + (normX / COORD_SCALE) * this.width * this.zoom,
+      this.panY + (normY / COORD_SCALE) * this.height * this.zoom,
     ];
   }
 
@@ -283,6 +335,9 @@ class DrawingCanvas {
       this.initCanvasSize();
     });
 
+    // Wheel zooming & trackpad panning
+    this.cursorCanvas.addEventListener('wheel', this.handleWheel.bind(this), { passive: false });
+
     // Pointer Events on topmost layer
     this.cursorCanvas.addEventListener('pointerdown', this.handlePointerDown.bind(this));
     this.cursorCanvas.addEventListener('pointermove', this.handlePointerMove.bind(this));
@@ -291,8 +346,71 @@ class DrawingCanvas {
     this.cursorCanvas.addEventListener('pointerleave', this.handlePointerLeave.bind(this));
   }
 
+  handleWheel(e) {
+    e.preventDefault();
+    const rect = this.cursorCanvas.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+
+    if (e.ctrlKey || e.metaKey || this.tool === 3) {
+      const zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
+      this.zoomAt(screenX, screenY, this.zoom * zoomFactor);
+    } else {
+      this.panX -= e.deltaX;
+      this.panY -= e.deltaY;
+      this.onZoomChange(this.zoom, this.panX, this.panY);
+      this.redrawAll();
+    }
+  }
+
+  cancelDrawing() {
+    this.isDrawing = false;
+    this.localPoints = [];
+    this.pendingPoints = [];
+    this.clearActiveCanvas();
+    this.renderAllActiveStrokes();
+  }
+
   handlePointerDown(e) {
     e.preventDefault();
+    this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // Multi-touch pinch gesture detected (2 or more fingers)
+    if (this.activePointers.size >= 2) {
+      if (this.isDrawing) {
+        this.cancelDrawing();
+      }
+      this.isDraggingSelection = false;
+      this.isResizing = false;
+      this.isMarqueeSelecting = false;
+      this.isPanning = false;
+      this.isPinching = true;
+
+      const pts = Array.from(this.activePointers.values());
+      this.pinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      this.pinchStartZoom = this.zoom;
+      this.pinchStartPan = [this.panX, this.panY];
+      const rect = this.cursorCanvas.getBoundingClientRect();
+      this.pinchStartCenterLocal = [
+        (pts[0].x + pts[1].x) / 2 - rect.left,
+        (pts[0].y + pts[1].y) / 2 - rect.top,
+      ];
+      this.redrawAll();
+      return;
+    }
+
+    // Zoom / Pan Tool (tool === 3)
+    if (this.tool === 3) {
+      this.isPanning = true;
+      this.panStartPointer = [e.clientX, e.clientY];
+      this.panStartOffset = [this.panX, this.panY];
+      this.cursorCanvas.style.cursor = 'grabbing';
+      try {
+        this.cursorCanvas.setPointerCapture(e.pointerId);
+      } catch (_) {}
+      return;
+    }
+
     if (e.button !== undefined && e.button !== 0) return; // Only primary button
 
     const [normX, normY] = this.toNormalized(e.clientX, e.clientY);
@@ -392,6 +510,52 @@ class DrawingCanvas {
   }
 
   handlePointerMove(e) {
+    if (this.activePointers.has(e.pointerId)) {
+      this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+
+    // Handle 2-Finger Pinch Zoom + Pan
+    if (this.isPinching && this.activePointers.size >= 2) {
+      const pts = Array.from(this.activePointers.values());
+      const currDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      const rect = this.cursorCanvas.getBoundingClientRect();
+      const currCenterLocal = [
+        (pts[0].x + pts[1].x) / 2 - rect.left,
+        (pts[0].y + pts[1].y) / 2 - rect.top,
+      ];
+
+      if (this.pinchStartDist > 0) {
+        const scaleFactor = currDist / this.pinchStartDist;
+        const targetZoom = Math.max(0.25, Math.min(5.0, this.pinchStartZoom * scaleFactor));
+
+        const cX = this.pinchStartCenterLocal[0];
+        const cY = this.pinchStartCenterLocal[1];
+
+        const newPanX = cX - (cX - this.pinchStartPan[0]) * (targetZoom / this.pinchStartZoom) + (currCenterLocal[0] - this.pinchStartCenterLocal[0]);
+        const newPanY = cY - (cY - this.pinchStartPan[1]) * (targetZoom / this.pinchStartZoom) + (currCenterLocal[1] - this.pinchStartCenterLocal[1]);
+
+        this.zoom = targetZoom;
+        this.panX = newPanX;
+        this.panY = newPanY;
+        this.onZoomChange(this.zoom, this.panX, this.panY);
+        this.redrawAll();
+      }
+      return;
+    }
+
+    // Handle 1-Finger Pan in Zoom/Hand Tool (tool === 3)
+    if (this.tool === 3 && this.isPanning) {
+      const dx = e.clientX - this.panStartPointer[0];
+      const dy = e.clientY - this.panStartPointer[1];
+      this.panX = this.panStartOffset[0] + dx;
+      this.panY = this.panStartOffset[1] + dy;
+      this.onZoomChange(this.zoom, this.panX, this.panY);
+      this.redrawAll();
+      return;
+    }
+
+    if (this.tool === 3) return;
+
     const [normX, normY] = this.toNormalized(e.clientX, e.clientY);
     const [sx, sy] = this.toScreen(normX, normY);
     
@@ -538,6 +702,25 @@ class DrawingCanvas {
   }
 
   handlePointerUp(e) {
+    this.activePointers.delete(e.pointerId);
+
+    if (this.isPinching) {
+      if (this.activePointers.size < 2) {
+        this.isPinching = false;
+      }
+      this.redrawAll();
+      return;
+    }
+
+    if (this.tool === 3) {
+      this.isPanning = false;
+      this.cursorCanvas.style.cursor = 'grab';
+      try {
+        this.cursorCanvas.releasePointerCapture(e.pointerId);
+      } catch (_) {}
+      return;
+    }
+
     if (this.tool === 2) {
       try {
         this.cursorCanvas.releasePointerCapture(e.pointerId);
@@ -610,6 +793,12 @@ class DrawingCanvas {
 
   handlePointerLeave() {
     this.onCursorMove(0, 0, false);
+    this.activePointers.clear();
+    this.isPinching = false;
+    if (this.tool === 3) {
+      this.isPanning = false;
+      this.cursorCanvas.style.cursor = 'grab';
+    }
   }
 
   // =========================================================================
@@ -683,7 +872,8 @@ class DrawingCanvas {
   drawDot(ctx, x, y, tool, color, size) {
     ctx.save();
     ctx.beginPath();
-    ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+    const r = ((size || 2) * this.zoom) / 2;
+    ctx.arc(x, y, r, 0, Math.PI * 2);
     if (tool === 1) {
       ctx.fillStyle = '#ffffff';
     } else {
@@ -700,7 +890,7 @@ class DrawingCanvas {
     ctx.lineTo(x2, y2);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.lineWidth = size;
+    ctx.lineWidth = (size || 2) * this.zoom;
     ctx.strokeStyle = tool === 1 ? '#ffffff' : color;
     ctx.stroke();
     ctx.restore();
@@ -718,13 +908,13 @@ class DrawingCanvas {
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.lineWidth = stroke.size;
+    ctx.lineWidth = (stroke.size || 2) * this.zoom;
     ctx.strokeStyle = stroke.tool === 1 ? '#ffffff' : stroke.color;
 
     if (pts.length === 1) {
       const [sx, sy] = this.toScreen(pts[0][0], pts[0][1]);
       ctx.beginPath();
-      ctx.arc(sx, sy, stroke.size / 2, 0, Math.PI * 2);
+      ctx.arc(sx, sy, ((stroke.size || 2) * this.zoom) / 2, 0, Math.PI * 2);
       ctx.fillStyle = ctx.strokeStyle;
       ctx.fill();
     } else {
