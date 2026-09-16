@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const toolEraser = document.getElementById('tool-eraser');
   const toolSelect = document.getElementById('tool-select');
   const toolZoom = document.getElementById('tool-zoom');
+  const btnResetZoom = document.getElementById('btn-reset-zoom');
   const btnColorTrigger = document.getElementById('btn-color-trigger');
   const btnSizeTrigger = document.getElementById('btn-size-trigger');
   const btnUndo = document.getElementById('btn-undo');
@@ -497,6 +498,16 @@ document.addEventListener('DOMContentLoaded', () => {
     closeTrays();
     if (net) net.sendServerMessage({ type: 'stroke_redo' });
   });
+
+  if (btnResetZoom) {
+    btnResetZoom.addEventListener('click', () => {
+      closeTrays();
+      if (canvas) {
+        canvas.resetZoom();
+        showToast('Zoom reset to 100%');
+      }
+    });
+  }
 
   btnClear.addEventListener('click', () => {
     closeTrays();

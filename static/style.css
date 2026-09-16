@@ -42,6 +42,10 @@
   -webkit-user-select: none;
 }
 
+.hidden {
+  display: none !important;
+}
+
 html, body {
   width: 100%;
   height: 100%;
@@ -298,16 +302,16 @@ html, body {
    ========================================================================== */
 .reference-image-bar {
   position: absolute;
-  top: 10px;
+  top: calc(48px + var(--safe-top));
   left: 50%;
   transform: translateX(-50%);
   z-index: 120;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   background: var(--bg-glass);
   border: 1px solid var(--border-glass);
-  padding: 4px 8px;
+  padding: 3px 6px;
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-float);
   backdrop-filter: blur(20px);
@@ -454,6 +458,21 @@ html, body {
   font-weight: 600;
   margin-top: 2px;
   letter-spacing: 0.1px;
+}
+
+.reset-badge-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: #818cf8;
+  line-height: 1.1;
+  transition: color 0.15s ease;
+}
+
+.tool-btn:hover .reset-badge-text,
+.tool-btn:active .reset-badge-text {
+  color: #ffffff;
 }
 
 .tool-btn:hover {
