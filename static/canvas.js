@@ -468,36 +468,19 @@ class DrawingCanvas {
     const now = Date.now();
 
     for (const [userId, cursor] of this.remoteCursors.entries()) {
-      if (now - cursor.lastSeen > 4000 || cursor.x === 0) continue;
+      if (now - cursor.lastSeen > 3500 || cursor.x === 0) continue;
 
       const [sx, sy] = this.toScreen(cursor.x, cursor.y);
 
       this.cursorCtx.save();
-      // Draw cursor circle
+      // Draw minimal sleek indicator dot (red when drawing, blue/indigo when moving)
       this.cursorCtx.beginPath();
-      this.cursorCtx.arc(sx, sy, cursor.isDrawing ? 6 : 4, 0, Math.PI * 2);
-      this.cursorCtx.fillStyle = cursor.isDrawing ? '#ef4444' : '#6366f1';
+      this.cursorCtx.arc(sx, sy, cursor.isDrawing ? 5 : 3.5, 0, Math.PI * 2);
+      this.cursorCtx.fillStyle = cursor.isDrawing ? '#ef4444' : '#3b82f6';
       this.cursorCtx.fill();
       this.cursorCtx.lineWidth = 1.5;
       this.cursorCtx.strokeStyle = '#ffffff';
       this.cursorCtx.stroke();
-
-      // Draw username badge
-      this.cursorCtx.font = '10px Outfit, sans-serif';
-      this.cursorCtx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-      const text = `User ${userId}`;
-      const metrics = this.cursorCtx.measureText(text);
-      const bgW = metrics.width + 10;
-      const bgH = 16;
-      const bgX = sx + 8;
-      const bgY = sy - 8;
-
-      this.cursorCtx.beginPath();
-      this.cursorCtx.roundRect(bgX, bgY, bgW, bgH, 4);
-      this.cursorCtx.fill();
-
-      this.cursorCtx.fillStyle = '#ffffff';
-      this.cursorCtx.fillText(text, bgX + 5, bgY + 12);
       this.cursorCtx.restore();
     }
   }
