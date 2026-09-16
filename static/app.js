@@ -253,12 +253,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateSelectionOverlay() {
     if (!selectionActions || !canvas) return;
-    if (activeTool === 2 && canvas.selectedStrokeId) {
+    if (activeTool === 2 && canvas.selectedStrokeIds && canvas.selectedStrokeIds.size > 0) {
       const bounds = canvas.getSelectedStrokeScreenBounds();
       if (bounds) {
         selectionActions.classList.remove('hidden');
         const contW = container.clientWidth || window.innerWidth;
-        const clampedX = Math.max(65, Math.min(contW - 65, bounds.topCenterX));
+        const clampedX = Math.max(30, Math.min(contW - 30, bounds.topCenterX));
         const clampedY = Math.max(45, bounds.topY);
         selectionActions.style.left = `${clampedX}px`;
         selectionActions.style.top = `${clampedY}px`;
@@ -377,15 +377,19 @@ document.addEventListener('DOMContentLoaded', () => {
     btnDeleteSelection.addEventListener('click', (e) => {
       e.stopPropagation();
       if (!canvas) return;
-      const deletedSid = canvas.deleteSelectedStroke();
-      if (deletedSid) {
-        const buffer = Protocol.encodeStrokeUndo(currentUserId, deletedSid);
+      const deletedIds = canvas.deleteSelectedStrokes();
+      if (deletedIds && deletedIds.length > 0) {
+        for (const sid of deletedIds) {
+          const buffer = Protocol.encodeStrokeUndo(currentUserId, sid);
+          if (net) {
+            net.broadcastBinary(buffer, false);
+          }
+        }
         if (net) {
-          net.broadcastBinary(buffer, false);
           net.sendServerMessage({ type: 'stroke_undo' });
         }
         updateSelectionOverlay();
-        showToast('Element deleted');
+        showToast(deletedIds.length === 1 ? 'Element deleted' : `${deletedIds.length} elements deleted`);
       }
     });
   }
@@ -458,7 +462,7 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       btnRedo.click();
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (canvas && canvas.selectedStrokeId) {
+      if (canvas && canvas.selectedStrokeIds && canvas.selectedStrokeIds.size > 0) {
         e.preventDefault();
         if (btnDeleteSelection) btnDeleteSelection.click();
       }

@@ -209,26 +209,18 @@ html, body {
   touch-action: none;
 }
 
-/* Selection Floating Action Menu */
+/* Selection Floating Action (Simple Minimalist Delete Button) */
 .selection-actions {
   position: absolute;
   z-index: 150;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px;
-  background: rgba(15, 23, 42, 0.88);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  border-radius: var(--radius-full);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 12px rgba(239, 68, 68, 0.25);
   pointer-events: auto;
   user-select: none;
   -webkit-user-select: none;
   transform: translate(-50%, -100%);
-  margin-top: -8px;
-  animation: popIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-top: -10px;
+  animation: popIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
@@ -236,39 +228,36 @@ html, body {
   display: none !important;
 }
 
-.selection-action-btn {
+.selection-delete-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: var(--radius-full);
-  border: none;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  background: #ef4444;
+  color: #ffffff;
   cursor: pointer;
   outline: none;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4), 0 2px 4px rgba(0, 0, 0, 0.2);
   transition: all var(--transition-fast);
 }
 
-.selection-action-btn svg {
+.selection-delete-btn svg {
   width: 15px;
   height: 15px;
+  stroke: #ffffff;
 }
 
-.selection-action-btn.delete-btn {
-  background: #ef4444;
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
-}
-
-.selection-action-btn.delete-btn:hover {
+.selection-delete-btn:hover {
   background: #dc2626;
-  transform: scale(1.05);
+  transform: scale(1.12);
+  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.55), 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
-.selection-action-btn.delete-btn:active {
-  transform: scale(0.96);
+.selection-delete-btn:active {
+  transform: scale(0.92);
 }
 
 /* ==========================================================================

@@ -37,11 +37,18 @@ class DrawingCanvas {
     this.rawPointCount = 0;
     this.sampledPointCount = 0;
 
-    // Selection & Move tool state
-    this.selectedStrokeId = null;
+    // Multi-Selection & Transform tool state
+    this.selectedStrokeIds = new Set();
     this.isDraggingSelection = false;
+    this.isResizing = false;
+    this.activeResizeHandle = null;
+    this.isMarqueeSelecting = false;
+    this.marqueeStart = [0, 0];
+    this.marqueeCurrent = [0, 0];
     this.dragLastNorm = [0, 0];
     this.totalMoved = [0, 0];
+    this.initialBounds = null;
+    this.initialPointsMap = new Map();
 
     // Remote active strokes map: strokeId -> { userId, tool, color, size, points, lastPoint }
     this.remoteActiveStrokes = new Map();
@@ -86,8 +93,11 @@ class DrawingCanvas {
   setTool(tool) {
     this.tool = tool;
     if (tool !== 2) {
-      this.selectedStrokeId = null;
+      this.selectedStrokeIds.clear();
       this.isDraggingSelection = false;
+      this.isResizing = false;
+      this.isMarqueeSelecting = false;
+      this.cursorCanvas.style.cursor = 'default';
     }
     this.redrawAll();
   }
@@ -117,7 +127,7 @@ class DrawingCanvas {
     ];
   }
 
-  // Hit-Testing Utilities
+  // Hit-Testing & Bounding Utilities
   getStrokeBounds(stroke) {
     if (!stroke || !stroke.points || stroke.points.length === 0) return null;
     let minX = stroke.points[0][0], maxX = stroke.points[0][0];
@@ -130,6 +140,95 @@ class DrawingCanvas {
       if (p[1] > maxY) maxY = p[1];
     }
     return [minX, minY, maxX, maxY];
+  }
+
+  getSelectionBounds() {
+    if (this.selectedStrokeIds.size === 0) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let count = 0;
+    for (const sid of this.selectedStrokeIds) {
+      const stroke = this.committedStrokes.get(sid);
+      if (!stroke || stroke.undone || !stroke.points || stroke.points.length === 0) continue;
+      const b = this.getStrokeBounds(stroke);
+      if (!b) continue;
+      minX = Math.min(minX, b[0]);
+      minY = Math.min(minY, b[1]);
+      maxX = Math.max(maxX, b[2]);
+      maxY = Math.max(maxY, b[3]);
+      count++;
+    }
+    if (count === 0) return null;
+    return [minX, minY, maxX, maxY];
+  }
+
+  getSelectionScreenBounds() {
+    const bounds = this.getSelectionBounds();
+    if (!bounds) return null;
+
+    const padScreen = 10;
+    const [minSx, minSy] = this.toScreen(bounds[0], bounds[1]);
+    const [maxSx, maxSy] = this.toScreen(bounds[2], bounds[3]);
+
+    const x = minSx - padScreen;
+    const y = minSy - padScreen;
+    const width = Math.max(24, (maxSx - minSx) + padScreen * 2);
+    const height = Math.max(24, (maxSy - minSy) + padScreen * 2);
+
+    return {
+      x,
+      y,
+      width,
+      height,
+      minSx: x,
+      minSy: y,
+      maxSx: x + width,
+      maxSy: y + height,
+      topCenterX: x + width / 2,
+      topRightX: x + width,
+      topY: y,
+    };
+  }
+
+  getHandles(screenBounds) {
+    if (!screenBounds) return {};
+    const { x, y, width, height } = screenBounds;
+    return {
+      nw: [x, y],
+      n: [x + width / 2, y],
+      ne: [x + width, y],
+      e: [x + width, y + height / 2],
+      se: [x + width, y + height],
+      s: [x + width / 2, y + height],
+      sw: [x, y + height],
+      w: [x, y + height / 2],
+    };
+  }
+
+  getHandleUnderPointer(sx, sy) {
+    const screenBounds = this.getSelectionScreenBounds();
+    if (!screenBounds) return null;
+    const handles = this.getHandles(screenBounds);
+    const hitRadius = 14; // Touch & cursor friendly radius
+
+    for (const [name, pos] of Object.entries(handles)) {
+      const distSq = (sx - pos[0]) ** 2 + (sy - pos[1]) ** 2;
+      if (distSq <= hitRadius ** 2) {
+        return name;
+      }
+    }
+    return null;
+  }
+
+  isPointInsideSelection(normX, normY) {
+    const bounds = this.getSelectionBounds();
+    if (!bounds) return false;
+    const padding = Math.max(120, (14 / this.width) * COORD_SCALE);
+    return (
+      normX >= bounds[0] - padding &&
+      normX <= bounds[2] + padding &&
+      normY >= bounds[1] - padding &&
+      normY <= bounds[3] + padding
+    );
   }
 
   distToSegmentSq(px, py, x1, y1, x2, y2) {
@@ -197,28 +296,50 @@ class DrawingCanvas {
     if (e.button !== undefined && e.button !== 0) return; // Only primary button
 
     const [normX, normY] = this.toNormalized(e.clientX, e.clientY);
+    const [sx, sy] = this.toScreen(normX, normY);
 
     // Select Tool handler
     if (this.tool === 2) {
-      let hit = null;
-      // If a stroke is already selected, check if we clicked inside its bounding box
-      if (this.selectedStrokeId && this.committedStrokes.has(this.selectedStrokeId)) {
-        const selStroke = this.committedStrokes.get(this.selectedStrokeId);
-        const bounds = this.getStrokeBounds(selStroke);
-        const padding = Math.max(120, (16 / this.width) * COORD_SCALE);
-        if (bounds &&
-            normX >= bounds[0] - padding && normX <= bounds[2] + padding &&
-            normY >= bounds[1] - padding && normY <= bounds[3] + padding) {
-          hit = selStroke;
+      // 1. Check if clicked on a resize handle
+      const resizeHandle = this.getHandleUnderPointer(sx, sy);
+      if (resizeHandle && this.selectedStrokeIds.size > 0) {
+        this.isResizing = true;
+        this.activeResizeHandle = resizeHandle;
+        this.dragLastNorm = [normX, normY];
+        this.initialBounds = this.getSelectionBounds();
+        this.initialPointsMap.clear();
+        for (const sid of this.selectedStrokeIds) {
+          const s = this.committedStrokes.get(sid);
+          if (s && s.points) {
+            this.initialPointsMap.set(sid, s.points.map(p => [p[0], p[1]]));
+          }
         }
+        try {
+          this.cursorCanvas.setPointerCapture(e.pointerId);
+        } catch (_) {}
+        this.redrawAll();
+        return;
       }
 
-      if (!hit) {
-        hit = this.hitTest(normX, normY);
+      // 2. Check if clicked inside existing selection box to drag all selected
+      if (this.selectedStrokeIds.size > 0 && this.isPointInsideSelection(normX, normY)) {
+        this.isDraggingSelection = true;
+        this.dragLastNorm = [normX, normY];
+        this.totalMoved = [0, 0];
+        try {
+          this.cursorCanvas.setPointerCapture(e.pointerId);
+        } catch (_) {}
+        this.redrawAll();
+        return;
       }
 
+      // 3. Hit test individual stroke
+      const hit = this.hitTest(normX, normY);
       if (hit) {
-        this.selectedStrokeId = hit.id;
+        if (!e.shiftKey) {
+          this.selectedStrokeIds.clear();
+        }
+        this.selectedStrokeIds.add(hit.id);
         this.isDraggingSelection = true;
         this.dragLastNorm = [normX, normY];
         this.totalMoved = [0, 0];
@@ -226,16 +347,25 @@ class DrawingCanvas {
           this.cursorCanvas.setPointerCapture(e.pointerId);
         } catch (_) {}
       } else {
-        this.selectedStrokeId = null;
-        this.isDraggingSelection = false;
+        // 4. Clicked on empty space: Start Marquee selection drag
+        if (!e.shiftKey) {
+          this.selectedStrokeIds.clear();
+        }
+        this.isMarqueeSelecting = true;
+        this.marqueeStart = [normX, normY];
+        this.marqueeCurrent = [normX, normY];
+        try {
+          this.cursorCanvas.setPointerCapture(e.pointerId);
+        } catch (_) {}
       }
 
-      this.onSelectionChange(this.selectedStrokeId);
+      this.onSelectionChange(this.selectedStrokeIds);
       this.redrawAll();
       return;
     }
 
-    this.selectedStrokeId = null;
+    // Normal Pen / Eraser drawing
+    this.selectedStrokeIds.clear();
     this.cursorCanvas.setPointerCapture(e.pointerId);
     this.isDrawing = true;
     this.currentStrokeId = (Date.now() & 0x7fffffff) ^ Math.floor(Math.random() * 100000);
@@ -258,32 +388,110 @@ class DrawingCanvas {
     });
 
     // Draw starting dot immediately
-    const [sx, sy] = this.toScreen(normX, normY);
     this.drawDot(this.activeCtx, sx, sy, this.tool, this.color, this.brushSize);
   }
 
   handlePointerMove(e) {
     const [normX, normY] = this.toNormalized(e.clientX, e.clientY);
+    const [sx, sy] = this.toScreen(normX, normY);
     
     // Broadcast cursor position
-    this.onCursorMove(normX, normY, this.isDrawing || this.isDraggingSelection);
+    this.onCursorMove(normX, normY, this.isDrawing || this.isDraggingSelection || this.isResizing);
 
-    // Moving selected stroke
-    if (this.tool === 2 && this.isDraggingSelection && this.selectedStrokeId) {
-      const dx = normX - this.dragLastNorm[0];
-      const dy = normY - this.dragLastNorm[1];
-      this.dragLastNorm = [normX, normY];
-      this.totalMoved[0] += dx;
-      this.totalMoved[1] += dy;
-
-      const stroke = this.committedStrokes.get(this.selectedStrokeId);
-      if (stroke && stroke.points) {
-        for (const pt of stroke.points) {
-          pt[0] = Math.max(0, Math.min(COORD_SCALE, pt[0] + dx));
-          pt[1] = Math.max(0, Math.min(COORD_SCALE, pt[1] + dy));
+    // In Select Mode
+    if (this.tool === 2) {
+      // Hover cursor management
+      if (!this.isDrawing && !this.isDraggingSelection && !this.isResizing && !this.isMarqueeSelecting) {
+        const handle = this.getHandleUnderPointer(sx, sy);
+        if (handle) {
+          if (handle === 'nw' || handle === 'se') this.cursorCanvas.style.cursor = 'nwse-resize';
+          else if (handle === 'ne' || handle === 'sw') this.cursorCanvas.style.cursor = 'nesw-resize';
+          else if (handle === 'n' || handle === 's') this.cursorCanvas.style.cursor = 'ns-resize';
+          else if (handle === 'w' || handle === 'e') this.cursorCanvas.style.cursor = 'ew-resize';
+        } else if (this.isPointInsideSelection(normX, normY)) {
+          this.cursorCanvas.style.cursor = 'move';
+        } else {
+          this.cursorCanvas.style.cursor = 'default';
         }
       }
-      this.redrawAll();
+
+      // Handle Resizing
+      if (this.isResizing && this.initialBounds) {
+        const [initMinX, initMinY, initMaxX, initMaxY] = this.initialBounds;
+        let newMinX = initMinX;
+        let newMinY = initMinY;
+        let newMaxX = initMaxX;
+        let newMaxY = initMaxY;
+
+        const handle = this.activeResizeHandle;
+        if (handle.includes('w')) newMinX = Math.min(normX, initMaxX - 50);
+        if (handle.includes('e')) newMaxX = Math.max(normX, initMinX + 50);
+        if (handle.includes('n')) newMinY = Math.min(normY, initMaxY - 50);
+        if (handle.includes('s')) newMaxY = Math.max(normY, initMinY + 50);
+
+        const initW = Math.max(1, initMaxX - initMinX);
+        const initH = Math.max(1, initMaxY - initMinY);
+        const scaleX = (newMaxX - newMinX) / initW;
+        const scaleY = (newMaxY - newMinY) / initH;
+
+        for (const sid of this.selectedStrokeIds) {
+          const stroke = this.committedStrokes.get(sid);
+          const initPts = this.initialPointsMap.get(sid);
+          if (stroke && initPts) {
+            for (let i = 0; i < stroke.points.length; i++) {
+              stroke.points[i][0] = Math.max(0, Math.min(COORD_SCALE, Math.round(newMinX + (initPts[i][0] - initMinX) * scaleX)));
+              stroke.points[i][1] = Math.max(0, Math.min(COORD_SCALE, Math.round(newMinY + (initPts[i][1] - initMinY) * scaleY)));
+            }
+          }
+        }
+        this.redrawAll();
+        return;
+      }
+
+      // Handle Dragging / Moving Selection
+      if (this.isDraggingSelection && this.selectedStrokeIds.size > 0) {
+        const dx = normX - this.dragLastNorm[0];
+        const dy = normY - this.dragLastNorm[1];
+        this.dragLastNorm = [normX, normY];
+        this.totalMoved[0] += dx;
+        this.totalMoved[1] += dy;
+
+        for (const sid of this.selectedStrokeIds) {
+          const stroke = this.committedStrokes.get(sid);
+          if (stroke && stroke.points) {
+            for (const pt of stroke.points) {
+              pt[0] = Math.max(0, Math.min(COORD_SCALE, pt[0] + dx));
+              pt[1] = Math.max(0, Math.min(COORD_SCALE, pt[1] + dy));
+            }
+          }
+        }
+        this.redrawAll();
+        return;
+      }
+
+      // Handle Marquee Drag Selection
+      if (this.isMarqueeSelecting) {
+        this.marqueeCurrent = [normX, normY];
+        const boxMinX = Math.min(this.marqueeStart[0], this.marqueeCurrent[0]);
+        const boxMinY = Math.min(this.marqueeStart[1], this.marqueeCurrent[1]);
+        const boxMaxX = Math.max(this.marqueeStart[0], this.marqueeCurrent[0]);
+        const boxMaxY = Math.max(this.marqueeStart[1], this.marqueeCurrent[1]);
+
+        this.selectedStrokeIds.clear();
+        for (const [sid, stroke] of this.committedStrokes.entries()) {
+          if (stroke.undone || !stroke.points || stroke.points.length === 0) continue;
+          const b = this.getStrokeBounds(stroke);
+          if (!b) continue;
+          // Check box intersection
+          if (b[0] <= boxMaxX && b[2] >= boxMinX && b[1] <= boxMaxY && b[3] >= boxMinY) {
+            this.selectedStrokeIds.add(sid);
+          }
+        }
+        this.onSelectionChange(this.selectedStrokeIds);
+        this.redrawAll();
+        return;
+      }
+
       return;
     }
 
@@ -330,17 +538,42 @@ class DrawingCanvas {
   }
 
   handlePointerUp(e) {
-    if (this.tool === 2 && this.isDraggingSelection) {
-      this.isDraggingSelection = false;
+    if (this.tool === 2) {
       try {
         this.cursorCanvas.releasePointerCapture(e.pointerId);
       } catch (_) {}
 
-      if ((Math.abs(this.totalMoved[0]) > 2 || Math.abs(this.totalMoved[1]) > 2) && this.selectedStrokeId) {
-        this.onStrokeMove(this.selectedStrokeId, this.totalMoved[0], this.totalMoved[1]);
+      if (this.isResizing) {
+        this.isResizing = false;
+        this.activeResizeHandle = null;
+        // Broadcast all modified stroke movements
+        for (const sid of this.selectedStrokeIds) {
+          this.onStrokeMove(sid, 0, 0);
+        }
+        this.onSelectionChange(this.selectedStrokeIds);
+        this.redrawAll();
+        return;
       }
-      this.totalMoved = [0, 0];
-      this.redrawAll();
+
+      if (this.isDraggingSelection) {
+        this.isDraggingSelection = false;
+        if (Math.abs(this.totalMoved[0]) > 2 || Math.abs(this.totalMoved[1]) > 2) {
+          for (const sid of this.selectedStrokeIds) {
+            this.onStrokeMove(sid, this.totalMoved[0], this.totalMoved[1]);
+          }
+        }
+        this.totalMoved = [0, 0];
+        this.onSelectionChange(this.selectedStrokeIds);
+        this.redrawAll();
+        return;
+      }
+
+      if (this.isMarqueeSelecting) {
+        this.isMarqueeSelecting = false;
+        this.onSelectionChange(this.selectedStrokeIds);
+        this.redrawAll();
+        return;
+      }
       return;
     }
 
@@ -536,67 +769,63 @@ class DrawingCanvas {
   }
 
   drawSelectionBox(ctx) {
-    if (this.tool !== 2 || !this.selectedStrokeId) return;
-    const stroke = this.committedStrokes.get(this.selectedStrokeId);
-    if (!stroke || stroke.undone || !stroke.points || stroke.points.length === 0) return;
+    if (this.tool !== 2) return;
 
-    const bounds = this.getStrokeBounds(stroke);
-    if (!bounds) return;
+    // Draw active marquee selection box
+    if (this.isMarqueeSelecting) {
+      const minX = Math.min(this.marqueeStart[0], this.marqueeCurrent[0]);
+      const minY = Math.min(this.marqueeStart[1], this.marqueeCurrent[1]);
+      const maxX = Math.max(this.marqueeStart[0], this.marqueeCurrent[0]);
+      const maxY = Math.max(this.marqueeStart[1], this.marqueeCurrent[1]);
 
-    const padScreen = Math.max(8, (stroke.size || 2) + 6);
-    const [minSx, minSy] = this.toScreen(bounds[0], bounds[1]);
-    const [maxSx, maxSy] = this.toScreen(bounds[2], bounds[3]);
+      const [p1x, p1y] = this.toScreen(minX, minY);
+      const [p2x, p2y] = this.toScreen(maxX, maxY);
+      const mw = p2x - p1x;
+      const mh = p2y - p1y;
 
-    const x = minSx - padScreen;
-    const y = minSy - padScreen;
-    const w = (maxSx - minSx) + padScreen * 2;
-    const h = (maxSy - minSy) + padScreen * 2;
-
-    ctx.save();
-    // Bounding Box
-    ctx.setLineDash([5, 4]);
-    ctx.strokeStyle = '#3b82f6';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(x, y, w, h);
-
-    // Corner handles
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#3b82f6';
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.5;
-    const handleSize = 6;
-    const corners = [
-      [x, y],
-      [x + w, y],
-      [x, y + h],
-      [x + w, y + h],
-    ];
-    for (const [cx, cy] of corners) {
-      ctx.fillRect(cx - handleSize / 2, cy - handleSize / 2, handleSize, handleSize);
-      ctx.strokeRect(cx - handleSize / 2, cy - handleSize / 2, handleSize, handleSize);
+      ctx.save();
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.12)';
+      ctx.fillRect(p1x, p1y, mw, mh);
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.85)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(p1x, p1y, mw, mh);
+      ctx.restore();
     }
 
-    // Move icon badge at top center
-    const badgeW = 22;
-    const badgeH = 14;
-    const badgeX = x + w / 2 - badgeW / 2;
-    const badgeY = y - badgeH - 3;
-    ctx.fillStyle = '#3b82f6';
-    ctx.beginPath();
-    if (ctx.roundRect) {
-      ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 3);
-    } else {
-      ctx.rect(badgeX, badgeY, badgeW, badgeH);
+    // Draw selection bounding box and 8-point square handles
+    if (this.selectedStrokeIds.size > 0) {
+      const bounds = this.getSelectionScreenBounds();
+      if (!bounds) return;
+
+      const { x, y, width, height } = bounds;
+
+      ctx.save();
+      // Subtle highlight fill
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.04)';
+      ctx.fillRect(x, y, width, height);
+
+      // Bounding Box outline
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x, y, width, height);
+
+      // 8 Square Resize Handles (corners and side midpoints)
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 1.5;
+      const handleSize = 8;
+      const handles = this.getHandles(bounds);
+
+      for (const [hx, hy] of Object.values(handles)) {
+        ctx.fillRect(hx - handleSize / 2, hy - handleSize / 2, handleSize, handleSize);
+        ctx.strokeRect(hx - handleSize / 2, hy - handleSize / 2, handleSize, handleSize);
+      }
+
+      ctx.restore();
     }
-    ctx.fill();
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '10px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('✥', badgeX + badgeW / 2, badgeY + badgeH / 2);
-
-    ctx.restore();
   }
 
   redrawAll() {
@@ -618,40 +847,30 @@ class DrawingCanvas {
   }
 
   getSelectedStrokeScreenBounds() {
-    if (!this.selectedStrokeId) return null;
-    const stroke = this.committedStrokes.get(this.selectedStrokeId);
-    if (!stroke || stroke.undone || !stroke.points || stroke.points.length === 0) return null;
+    return this.getSelectionScreenBounds();
+  }
 
-    const bounds = this.getStrokeBounds(stroke);
-    if (!bounds) return null;
-
-    const padScreen = Math.max(8, (stroke.size || 2) + 6);
-    const [minSx, minSy] = this.toScreen(bounds[0], bounds[1]);
-    const [maxSx, maxSy] = this.toScreen(bounds[2], bounds[3]);
-
-    return {
-      x: minSx - padScreen,
-      y: minSy - padScreen,
-      width: (maxSx - minSx) + padScreen * 2,
-      height: (maxSy - minSy) + padScreen * 2,
-      topCenterX: (minSx + maxSx) / 2,
-      topY: minSy - padScreen,
-    };
+  deleteSelectedStrokes() {
+    if (this.selectedStrokeIds.size === 0) return [];
+    const deletedIds = [];
+    for (const sid of this.selectedStrokeIds) {
+      const stroke = this.committedStrokes.get(sid);
+      if (stroke) {
+        stroke.undone = true;
+        deletedIds.push(sid);
+      }
+    }
+    this.selectedStrokeIds.clear();
+    this.isDraggingSelection = false;
+    this.isResizing = false;
+    this.onSelectionChange(this.selectedStrokeIds);
+    this.redrawAll();
+    return deletedIds;
   }
 
   deleteSelectedStroke() {
-    if (!this.selectedStrokeId) return null;
-    const sid = this.selectedStrokeId;
-    const stroke = this.committedStrokes.get(sid);
-    if (stroke) {
-      stroke.undone = true;
-      this.selectedStrokeId = null;
-      this.isDraggingSelection = false;
-      this.onSelectionChange(null);
-      this.redrawAll();
-      return sid;
-    }
-    return null;
+    const ids = this.deleteSelectedStrokes();
+    return ids.length > 0 ? ids[0] : null;
   }
 
   // =========================================================================
