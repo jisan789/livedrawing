@@ -234,6 +234,24 @@
       </div>
     </nav>
 
+    <!-- Security PIN Protection Modal -->
+    <div id="pin-modal" class="modal-backdrop">
+      <div class="name-card pin-card" id="pin-card">
+        <div class="name-card-header">
+          <div class="name-card-icon">🔐</div>
+          <h3>Board Protected</h3>
+          <p>Enter 4-digit PIN to access this live board:</p>
+        </div>
+        <form id="pin-form" onsubmit="return false;">
+          <div class="input-group">
+            <input type="password" id="pin-input" maxlength="4" placeholder="••••" pattern="[0-9]*" inputmode="numeric" autocomplete="off" autocorrect="off" autofocus>
+          </div>
+          <div id="pin-error-msg" class="pin-error hidden">Incorrect PIN. Please try again.</div>
+          <button type="submit" id="btn-submit-pin" class="primary-btn">Unlock Board</button>
+        </form>
+      </div>
+    </div>
+
     <!-- First-Time / Name Change Modal -->
     <div id="name-modal" class="modal-backdrop hidden">
       <div class="name-card">

@@ -91,8 +91,16 @@ async def get_config():
         "coordScale": 10000,
     }
 
+BOARD_PIN = os.getenv("BOARD_PIN", "8099")
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    pin = websocket.query_params.get("pin")
+    if pin != BOARD_PIN:
+        logger.warning("Rejected WebSocket connection: invalid PIN.")
+        await websocket.close(code=4001, reason="Invalid PIN")
+        return
+
     requested_name = websocket.query_params.get("username")
     peer = None
     current_id = None

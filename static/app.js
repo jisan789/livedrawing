@@ -12,6 +12,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const myUserIdDisplay = document.getElementById('my-user-id');
   const myUserDot = document.getElementById('my-user-dot');
 
+  // PIN Modal Elements
+  const pinModal = document.getElementById('pin-modal');
+  const pinCard = document.getElementById('pin-card');
+  const pinForm = document.getElementById('pin-form');
+  const pinInput = document.getElementById('pin-input');
+  const pinErrorMsg = document.getElementById('pin-error-msg');
+  let currentPin = '';
+
   // Name Modal Elements
   const nameModal = document.getElementById('name-modal');
   const nameForm = document.getElementById('name-form');
@@ -103,9 +111,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let savedUsername = localStorage.getItem('livedraw_username');
 
-  function initApp(chosenName) {
+  function initApp(chosenName, pin) {
     if (net) return;
 
+    if (pin) currentPin = pin;
     currentUserId = chosenName || generateRandomName();
     myUserIdDisplay.textContent = 'YOU';
     myUserIdDisplay.title = `Display name: ${currentUserId}`;
@@ -113,6 +122,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize WebRTC Manager
     net = new WebRTCManager({
       requestedUsername: currentUserId,
+      pin: currentPin,
+
+      onInvalidPin: () => {
+        net = null;
+        showPinError('Invalid PIN entered.');
+        showPinModal();
+      },
 
       onWelcome: (msg) => {
         currentUserId = msg.user_id;
@@ -343,8 +359,54 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // =========================================================================
-  // First-time / Rename Modal
+  // PIN Security & Display Name Modals
   // =========================================================================
+
+  function showPinModal() {
+    if (pinModal) pinModal.classList.remove('hidden');
+    if (pinInput) {
+      pinInput.value = '';
+      setTimeout(() => pinInput.focus(), 150);
+    }
+  }
+
+  function hidePinModal() {
+    if (pinModal) pinModal.classList.add('hidden');
+    if (pinErrorMsg) pinErrorMsg.classList.add('hidden');
+  }
+
+  function showPinError(msg) {
+    if (pinErrorMsg) {
+      pinErrorMsg.textContent = msg || 'Incorrect PIN. Please try again.';
+      pinErrorMsg.classList.remove('hidden');
+    }
+    if (pinCard) {
+      pinCard.classList.remove('shake');
+      void pinCard.offsetWidth; // trigger reflow
+      pinCard.classList.add('shake');
+    }
+  }
+
+  if (pinForm && pinInput) {
+    pinForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const entered = pinInput.value.trim();
+      if (entered === '8099') {
+        currentPin = entered;
+        hidePinModal();
+        const initialName = cleanBaseName(savedUsername);
+        if (savedUsername && savedUsername.trim()) {
+          initApp(initialName, currentPin);
+        } else {
+          showNameModal(false);
+        }
+      } else {
+        showPinError('Incorrect PIN. Please try again.');
+        pinInput.value = '';
+        pinInput.focus();
+      }
+    });
+  }
 
   function showNameModal(isRename = false) {
     if (isRename) {
@@ -382,7 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('livedraw_username', entered);
 
     if (!net) {
-      initApp(entered);
+      initApp(entered, currentPin);
     } else {
       net.setUsername(entered);
     }
@@ -392,12 +454,8 @@ document.addEventListener('DOMContentLoaded', () => {
     showNameModal(true);
   });
 
-  const initialName = cleanBaseName(savedUsername);
-  if (savedUsername && savedUsername.trim()) {
-    initApp(initialName);
-  } else {
-    showNameModal(false);
-  }
+  // Always show PIN modal on every page load/reload
+  showPinModal();
 
   // =========================================================================
   // Tool & Action Handlers

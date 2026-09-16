@@ -8,6 +8,7 @@ class WebRTCManager {
     this.userId = null;
     this.userColor = null;
     this.requestedUsername = options.requestedUsername || null;
+    this.pin = options.pin || null;
     this.iceServers = [];
     this.peers = new Map(); // peerId -> { pc, liveChannel, reliableChannel, isConnected }
     this.ws = null;
@@ -33,6 +34,7 @@ class WebRTCManager {
     this.onStrokeMove = options.onStrokeMove || (() => {});
     this.onStatsUpdate = options.onStatsUpdate || (() => {});
     this.onChatMessage = options.onChatMessage || (() => {});
+    this.onInvalidPin = options.onInvalidPin || (() => {});
 
     this.init();
   }
@@ -56,8 +58,15 @@ class WebRTCManager {
   connectSignaling() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     let wsUrl = `${protocol}//${window.location.host}/ws`;
+    const params = [];
     if (this.requestedUsername) {
-      wsUrl += `?username=${encodeURIComponent(this.requestedUsername)}`;
+      params.push(`username=${encodeURIComponent(this.requestedUsername)}`);
+    }
+    if (this.pin) {
+      params.push(`pin=${encodeURIComponent(this.pin)}`);
+    }
+    if (params.length > 0) {
+      wsUrl += `?${params.join('&')}`;
     }
 
     this.ws = new WebSocket(wsUrl);
@@ -84,8 +93,13 @@ class WebRTCManager {
       }
     };
 
-    this.ws.onclose = () => {
+    this.ws.onclose = (event) => {
       this.isConnected = false;
+      if (event && event.code === 4001) {
+        console.error('WebSocket close: Invalid PIN (code 4001)');
+        this.onInvalidPin();
+        return;
+      }
       console.warn('Signaling WebSocket closed. Reconnecting in 2s...');
       setTimeout(() => this.connectSignaling(), 2000);
     };
