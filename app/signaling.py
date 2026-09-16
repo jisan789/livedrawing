@@ -84,6 +84,27 @@ class SignalingHub:
 
     async def connect(self, websocket: WebSocket, requested_name: Optional[str] = None) -> Peer:
         await websocket.accept()
+
+        # If requested base name already exists in active_peers, probe to see if old connection is dead
+        raw_name = (requested_name or "").strip()[:20]
+        base_name = self.clean_base_name(raw_name) if raw_name else None
+        if base_name:
+            matching_stale = []
+            for pid, old_p in list(self.active_peers.items()):
+                if self.clean_base_name(pid) == base_name:
+                    try:
+                        if hasattr(old_p.websocket, "client_state") and old_p.websocket.client_state != WebSocketState.CONNECTED:
+                            matching_stale.append(pid)
+                            continue
+                        await old_p.websocket.send_text(json.dumps({"type": "ping_check"}))
+                    except Exception:
+                        matching_stale.append(pid)
+            for pid in matching_stale:
+                if pid in self.active_peers:
+                    logger.info(f"Evicting stale socket for user '{pid}' on reload/reconnect.")
+                    del self.active_peers[pid]
+
+
         user_id = self.ensure_unique_name(requested_name)
         color = self.pick_color()
         peer = Peer(user_id, websocket, color)
@@ -242,7 +263,7 @@ class SignalingHub:
                 sid = msg.get("stroke_id")
                 points = msg.get("points", [])
                 if sid and points:
-                    board_state.append_points(sid, points)
+                    board_state.append_points(sid, points, current_sender_id)
                     chunk_msg = json.dumps({
                         "type": "stroke_chunk",
                         "user_id": current_sender_id,

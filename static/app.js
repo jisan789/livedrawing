@@ -159,8 +159,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       onPeerJoined: (msg) => {
         userCountDisplay.textContent = msg.user_count;
-        showToast(`${msg.user_id} joined`);
-        appendSysChatMessage(`${msg.user_id} joined the board`);
+        if (cleanBaseName(msg.user_id) !== cleanBaseName(currentUserId)) {
+          showToast(`${msg.user_id} joined`);
+          appendSysChatMessage(`${msg.user_id} joined the board`);
+        }
       },
 
       onPeerLeft: (msg) => {
@@ -168,8 +170,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (canvas) {
           canvas.removeRemoteUser(msg.user_id);
         }
-        showToast(`${msg.user_id} left`);
-        appendSysChatMessage(`${msg.user_id} left`);
+        if (cleanBaseName(msg.user_id) !== cleanBaseName(currentUserId)) {
+          showToast(`${msg.user_id} left`);
+          appendSysChatMessage(`${msg.user_id} left`);
+        }
       },
 
       onPeerRenamed: (msg) => {

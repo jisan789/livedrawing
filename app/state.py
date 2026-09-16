@@ -76,12 +76,15 @@ class BoardState:
             self.user_redo_stack[user_id].clear()
             return stroke
 
-    def append_points(self, stroke_id: int, points: List[List[int]]):
+    def append_points(self, stroke_id: int, points: List[List[int]], user_id: str = "unknown"):
         with self._lock:
-            if stroke_id in self.strokes:
-                stroke = self.strokes[stroke_id]
-                for pt in points:
-                    stroke.add_point(pt[0], pt[1])
+            if stroke_id not in self.strokes:
+                self.strokes[stroke_id] = Stroke(stroke_id, user_id, 0, "#1e1e1e", 2.0, [])
+                if stroke_id not in self.stroke_order:
+                    self.stroke_order.append(stroke_id)
+            stroke = self.strokes[stroke_id]
+            for pt in points:
+                stroke.add_point(pt[0], pt[1])
 
     def end_stroke(self, stroke_id: int):
         with self._lock:

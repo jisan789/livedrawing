@@ -76,9 +76,11 @@ class WebRTCManager {
   }
 
   connectSignaling() {
+    if (this.isConnecting) return;
     if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) {
       return;
     }
+    this.isConnecting = true;
     if (this.ws) {
       try { this.ws.close(); } catch (_) {}
     }
@@ -101,6 +103,7 @@ class WebRTCManager {
 
     this.ws.onopen = () => {
       this.isConnected = true;
+      this.isConnecting = false;
       console.log('Connected to signaling server');
 
       // Flush queued offline messages
@@ -132,6 +135,7 @@ class WebRTCManager {
 
     this.ws.onclose = (event) => {
       this.isConnected = false;
+      this.isConnecting = false;
       if (event && event.code === 4001) {
         console.error('WebSocket close: Invalid PIN (code 4001)');
         this.onInvalidPin();
@@ -146,6 +150,7 @@ class WebRTCManager {
     };
 
     this.ws.onerror = (err) => {
+      this.isConnecting = false;
       console.error('Signaling WebSocket error:', err);
     };
   }
@@ -203,15 +208,25 @@ class WebRTCManager {
         break;
 
       case 'stroke_start':
-        this.onStrokeStart(msg);
+        if (!this.isPeerDataChannelOpen(msg.user_id)) {
+          this.onStrokeStart(msg);
+        }
         break;
 
       case 'stroke_chunk':
-        this.onStrokeChunk(msg);
+        if (!this.isPeerDataChannelOpen(msg.user_id)) {
+          this.onStrokeChunk(msg);
+        }
         break;
 
       case 'stroke_end':
-        this.onStrokeEnd(msg);
+        if (!this.isPeerDataChannelOpen(msg.user_id)) {
+          this.onStrokeEnd(msg);
+        }
+        break;
+
+      case 'ping_check':
+        // Keep-alive heartbeat probe, ignore
         break;
 
       case 'stroke_move':
@@ -289,8 +304,7 @@ class WebRTCManager {
 
     if (isInitiator) {
       const liveDc = pc.createDataChannel('livedraw_live', {
-        ordered: false,
-        maxRetransmits: 0,
+        ordered: true,
       });
       this.setupDataChannel(targetPeerId, liveDc, true);
 
@@ -466,6 +480,15 @@ class WebRTCManager {
         }));
       }
     }, 2000);
+  }
+
+  isPeerDataChannelOpen(userId) {
+    if (!userId || !this.peers.has(userId)) return false;
+    const peer = this.peers.get(userId);
+    return !!(
+      (peer.liveChannel && peer.liveChannel.readyState === 'open') ||
+      (peer.reliableChannel && peer.reliableChannel.readyState === 'open')
+    );
   }
 
   getOpenChannelCount() {

@@ -981,6 +981,14 @@ class DrawingCanvas {
     const stroke = this.remoteActiveStrokes.get(data.strokeId);
     if (!stroke || !data.points || data.points.length === 0) return;
 
+    if (!stroke.receivedSeqs) stroke.receivedSeqs = new Set();
+    if (data.seq !== undefined && data.seq !== null) {
+      if (stroke.receivedSeqs.has(data.seq)) {
+        return; // Duplicate chunk already processed! Drop it!
+      }
+      stroke.receivedSeqs.add(data.seq);
+    }
+
     let prev = stroke.lastPoint;
     for (const pt of data.points) {
       if (prev && pt[0] === prev[0] && pt[1] === prev[1]) continue;
