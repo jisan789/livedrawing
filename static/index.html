@@ -10,12 +10,12 @@
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <div id="app-container">
-    <!-- Top Header Bar -->
+    <!-- Sleek Top Header Bar -->
     <header id="top-bar">
       <div class="header-left">
         <div class="live-badge">
@@ -31,28 +31,19 @@
           </svg>
           <span id="user-count-display">1 USER</span>
         </div>
-        <div id="my-user-tag" class="user-tag" title="Your User ID">
-          <span class="user-color-dot" id="my-user-dot"></span>
-          <span id="my-user-id">YOU</span>
-        </div>
       </div>
 
       <div class="header-right">
-        <div id="latency-pill" class="info-pill" title="Network Latency">
+        <div id="latency-pill" class="info-pill" title="Round-trip Latency">
           <svg class="pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
           </svg>
           <span id="latency-display">-- ms</span>
         </div>
-        <div id="webrtc-badge" class="channel-badge" title="WebRTC DataChannel Status">
-          <span class="webrtc-icon">⚡</span>
-          <span id="webrtc-status">P2P DC</span>
+        <div id="my-user-tag" class="user-tag" title="Your User ID">
+          <span class="user-color-dot" id="my-user-dot"></span>
+          <span id="my-user-id">YOU</span>
         </div>
-        <button id="btn-stats-toggle" class="header-icon-btn" aria-label="Open Network Statistics" title="Statistics">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 20V10M12 20V4M6 20v-6"></path>
-          </svg>
-        </button>
       </div>
     </header>
 
@@ -98,7 +89,7 @@
     <nav id="bottom-bar">
       <div class="toolbar-pill">
         <!-- Pen Tool -->
-        <button id="tool-pen" class="tool-btn active" title="Pen (P)" aria-label="Pen Tool">
+        <button id="tool-pen" class="tool-btn active" title="Pen" aria-label="Pen Tool">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
             <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
@@ -109,7 +100,7 @@
         </button>
 
         <!-- Eraser Tool -->
-        <button id="tool-eraser" class="tool-btn" title="Eraser (E)" aria-label="Eraser Tool">
+        <button id="tool-eraser" class="tool-btn" title="Eraser" aria-label="Eraser Tool">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path>
             <path d="M22 21H7"></path>
@@ -135,7 +126,7 @@
         <div class="tool-divider"></div>
 
         <!-- Undo -->
-        <button id="btn-undo" class="tool-btn action-btn" title="Undo (Ctrl+Z)" aria-label="Undo">
+        <button id="btn-undo" class="tool-btn action-btn" title="Undo" aria-label="Undo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 7v6h6"></path>
             <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
@@ -144,7 +135,7 @@
         </button>
 
         <!-- Redo -->
-        <button id="btn-redo" class="tool-btn action-btn" title="Redo (Ctrl+Y)" aria-label="Redo">
+        <button id="btn-redo" class="tool-btn action-btn" title="Redo" aria-label="Redo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 7v6h-6"></path>
             <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"></path>
@@ -166,74 +157,6 @@
         </button>
       </div>
     </nav>
-
-    <!-- Detailed Stats Modal -->
-    <div id="stats-modal" class="modal-backdrop hidden">
-      <div class="modal-card">
-        <div class="modal-header">
-          <h3>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="modal-title-icon">
-              <path d="M18 20V10M12 20V4M6 20v-6"></path>
-            </svg>
-            Live Performance & Network
-          </h3>
-          <button id="btn-close-stats" class="modal-close-btn">&times;</button>
-        </div>
-        <div class="stats-grid">
-          <div class="stat-box">
-            <span class="stat-label">Connected Users</span>
-            <span class="stat-value" id="stat-users">1</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-label">WebRTC Status</span>
-            <span class="stat-value highlight" id="stat-webrtc">Connected</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-label">DataChannels Open</span>
-            <span class="stat-value" id="stat-channels">0</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-label">Round-Trip Latency</span>
-            <span class="stat-value" id="stat-latency">-- ms</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-label">Bytes Sent</span>
-            <span class="stat-value" id="stat-bytes-sent">0 KB</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-label">Bytes Received</span>
-            <span class="stat-value" id="stat-bytes-recv">0 KB</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-label">Packets Sent</span>
-            <span class="stat-value" id="stat-packets-sent">0</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-label">Packets Received</span>
-            <span class="stat-value" id="stat-packets-recv">0</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-label">Active Stroke Points</span>
-            <span class="stat-value" id="stat-stroke-points">0</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-label">Total Strokes</span>
-            <span class="stat-value" id="stat-total-strokes">0</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-label">Data Reduction Rate</span>
-            <span class="stat-value text-green" id="stat-reduction">~88%</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-label">Protocol Mode</span>
-            <span class="stat-value" id="stat-protocol">Binary (TypedArray)</span>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <span class="protocol-badge">⚡ Delta-Compressed Vector Protocol (No Canvas Images)</span>
-        </div>
-      </div>
-    </div>
 
     <!-- Toast Notification Overlay -->
     <div id="toast-container"></div>

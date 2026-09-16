@@ -10,7 +10,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const latencyDisplay = document.getElementById('latency-display');
   const myUserIdDisplay = document.getElementById('my-user-id');
   const myUserDot = document.getElementById('my-user-dot');
-  const webrtcStatus = document.getElementById('webrtc-status');
 
   // Tool Buttons
   const toolPen = document.getElementById('tool-pen');
@@ -20,7 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnUndo = document.getElementById('btn-undo');
   const btnRedo = document.getElementById('btn-redo');
   const btnClear = document.getElementById('btn-clear');
-  const btnStatsToggle = document.getElementById('btn-stats-toggle');
 
   // Floating Trays
   const colorTray = document.getElementById('color-tray');
@@ -32,21 +30,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const sizePreviewDot = document.getElementById('size-preview-dot');
   const sizeValueDisplay = document.getElementById('size-value-display');
   const activeSizeLabel = document.getElementById('active-size-label');
-
-  // Stats Modal Elements
-  const statsModal = document.getElementById('stats-modal');
-  const btnCloseStats = document.getElementById('btn-close-stats');
-  const statUsers = document.getElementById('stat-users');
-  const statWebRTC = document.getElementById('stat-webrtc');
-  const statChannels = document.getElementById('stat-channels');
-  const statLatency = document.getElementById('stat-latency');
-  const statBytesSent = document.getElementById('stat-bytes-sent');
-  const statBytesRecv = document.getElementById('stat-bytes-recv');
-  const statPacketsSent = document.getElementById('stat-packets-sent');
-  const statPacketsRecv = document.getElementById('stat-packets-recv');
-  const statStrokePoints = document.getElementById('stat-stroke-points');
-  const statTotalStrokes = document.getElementById('stat-total-strokes');
-  const statReduction = document.getElementById('stat-reduction');
 
   let currentUserId = 'ME';
   let currentUserColor = '#3b82f6';
@@ -226,8 +209,8 @@ document.addEventListener('DOMContentLoaded', () => {
     sizeSlider.value = activeBrushSize;
     sizeValueDisplay.textContent = `${activeBrushSize}px`;
     activeSizeLabel.textContent = `${activeBrushSize}px`;
-    sizePreviewDot.style.width = `${Math.min(32, Math.max(2, activeBrushSize))}px`;
-    sizePreviewDot.style.height = `${Math.min(32, Math.max(2, activeBrushSize))}px`;
+    sizePreviewDot.style.width = `${Math.min(28, Math.max(2, activeBrushSize))}px`;
+    sizePreviewDot.style.height = `${Math.min(28, Math.max(2, activeBrushSize))}px`;
   }
 
   function closeTrays() {
@@ -319,67 +302,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Stats Modal
-  btnStatsToggle.addEventListener('click', () => {
-    updateStatsModal();
-    statsModal.classList.remove('hidden');
-  });
-
-  btnCloseStats.addEventListener('click', () => {
-    statsModal.classList.add('hidden');
-  });
-
-  statsModal.addEventListener('click', (e) => {
-    if (e.target === statsModal) {
-      statsModal.classList.add('hidden');
-    }
-  });
-
-  // =========================================================================
-  // Metrics & Stats Monitor Loop
-  // =========================================================================
-
-  function formatBytes(bytes) {
-    if (bytes < 1024) return `${bytes} B`;
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-
-  function updateStatsModal() {
-    const netStats = net.getStats();
-    const canvasStats = canvas.getMetrics();
-
-    statUsers.textContent = `${netStats.peerCount + 1}`;
-    statChannels.textContent = `${netStats.openChannels}`;
-    statLatency.textContent = netStats.latencyMs > 0 ? `${netStats.latencyMs} ms` : '< 10 ms';
-    statBytesSent.textContent = formatBytes(netStats.bytesSent);
-    statBytesRecv.textContent = formatBytes(netStats.bytesReceived);
-    statPacketsSent.textContent = netStats.packetsSent.toLocaleString();
-    statPacketsRecv.textContent = netStats.packetsReceived.toLocaleString();
-    statStrokePoints.textContent = canvasStats.sampledPoints.toLocaleString();
-    statTotalStrokes.textContent = canvasStats.totalStrokes.toLocaleString();
-    statReduction.textContent = `~${canvasStats.reductionPercent}%`;
-
-    const isDirectP2P = netStats.openChannels > 0;
-    statWebRTC.textContent = isDirectP2P ? 'P2P Mesh (Active)' : 'WebSocket Fallback';
-    statWebRTC.className = `stat-value ${isDirectP2P ? 'text-green' : 'highlight'}`;
-  }
-
-  // Periodic metrics update for header pills
+  // Smooth Periodic Latency Update (ms only)
   setInterval(() => {
     const netStats = net.getStats();
     latencyDisplay.textContent = netStats.latencyMs > 0 ? `${netStats.latencyMs} ms` : '< 10 ms';
-    
-    if (netStats.openChannels > 0) {
-      webrtcStatus.textContent = 'P2P DC';
-      webrtcStatus.parentElement.style.color = '#10b981';
-    } else {
-      webrtcStatus.textContent = 'LIVE WS';
-      webrtcStatus.parentElement.style.color = '#3b82f6';
-    }
-
-    if (!statsModal.classList.contains('hidden')) {
-      updateStatsModal();
-    }
   }, 500);
 
   // Toast Notification System
@@ -391,8 +317,8 @@ document.addEventListener('DOMContentLoaded', () => {
     container.appendChild(toast);
     setTimeout(() => {
       toast.style.opacity = '0';
-      setTimeout(() => toast.remove(), 300);
-    }, 2200);
+      setTimeout(() => toast.remove(), 250);
+    }, 2000);
   }
 
   // Initialize defaults
