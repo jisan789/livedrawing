@@ -30,10 +30,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const toolEraser = document.getElementById('tool-eraser');
   const toolSelect = document.getElementById('tool-select');
   const toolZoom = document.getElementById('tool-zoom');
-  const btnZoomIn = document.getElementById('btn-zoom-in');
-  const btnZoomOut = document.getElementById('btn-zoom-out');
-  const btnZoomReset = document.getElementById('btn-zoom-reset');
-  const zoomValueDisplay = document.getElementById('zoom-value-display');
   const btnColorTrigger = document.getElementById('btn-color-trigger');
   const btnSizeTrigger = document.getElementById('btn-size-trigger');
   const btnUndo = document.getElementById('btn-undo');
@@ -247,9 +243,6 @@ document.addEventListener('DOMContentLoaded', () => {
       },
 
       onZoomChange: (zoom, panX, panY) => {
-        if (zoomValueDisplay) {
-          zoomValueDisplay.textContent = `${Math.round(zoom * 100)}%`;
-        }
         updateSelectionOverlay();
       },
 
@@ -385,11 +378,6 @@ document.addEventListener('DOMContentLoaded', () => {
   toolEraser.addEventListener('click', () => selectTool(1));
   if (toolSelect) toolSelect.addEventListener('click', () => selectTool(2));
   if (toolZoom) toolZoom.addEventListener('click', () => selectTool(3));
-
-  // Zoom Controls Widget
-  if (btnZoomIn) btnZoomIn.addEventListener('click', () => canvas && canvas.zoomIn());
-  if (btnZoomOut) btnZoomOut.addEventListener('click', () => canvas && canvas.zoomOut());
-  if (btnZoomReset) btnZoomReset.addEventListener('click', () => canvas && canvas.resetZoom());
 
   // Delete Selection Handler
   if (btnDeleteSelection) {

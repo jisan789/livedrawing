@@ -133,7 +133,7 @@ class DrawingCanvas {
 
   // Zoom & Pan API
   zoomAt(screenX, screenY, newZoom) {
-    const clampedZoom = Math.max(0.25, Math.min(5.0, newZoom));
+    const clampedZoom = Math.max(0.25, Math.min(10.0, newZoom));
     const oldZoom = this.zoom;
     if (Math.abs(clampedZoom - oldZoom) < 0.001) return;
 
@@ -526,7 +526,7 @@ class DrawingCanvas {
 
       if (this.pinchStartDist > 0) {
         const scaleFactor = currDist / this.pinchStartDist;
-        const targetZoom = Math.max(0.25, Math.min(5.0, this.pinchStartZoom * scaleFactor));
+        const targetZoom = Math.max(0.25, Math.min(10.0, this.pinchStartZoom * scaleFactor));
 
         const cX = this.pinchStartCenterLocal[0];
         const cY = this.pinchStartCenterLocal[1];
