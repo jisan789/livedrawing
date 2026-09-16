@@ -4,8 +4,13 @@ Authoritative storage of vector strokes, supporting concurrent users, undo/redo,
 """
 
 from typing import Dict, List, Optional, Any
+import os
+import json
 import time
 import threading
+import logging
+
+logger = logging.getLogger("livedraw.state")
 
 class Stroke:
     def __init__(
@@ -43,12 +48,14 @@ class Stroke:
 
 
 class BoardState:
-    def __init__(self):
+    def __init__(self, storage_path: str = "board_state.json"):
         self._lock = threading.Lock()
+        self.storage_path = storage_path
         self.strokes: Dict[int, Stroke] = {}
         self.stroke_order: List[int] = []
         self.user_undo_stack: Dict[str, List[int]] = {}  # user_id -> list of stroke_ids
         self.user_redo_stack: Dict[str, List[int]] = {}  # user_id -> list of stroke_ids
+        self.load_from_disk()
 
     def start_stroke(self, stroke_id: int, user_id: str, tool: int, color: str, size: float, x: int, y: int) -> Stroke:
         with self._lock:
@@ -112,12 +119,17 @@ class BoardState:
             return None
 
     def clear(self, user_id: Optional[str] = None):
-        """Clears the board."""
+        """Clears the board and removes disk backup."""
         with self._lock:
             self.strokes.clear()
             self.stroke_order.clear()
             self.user_undo_stack.clear()
             self.user_redo_stack.clear()
+            if os.path.exists(self.storage_path):
+                try:
+                    os.remove(self.storage_path)
+                except Exception:
+                    pass
 
     def get_snapshot(self) -> List[Dict[str, Any]]:
         """Returns all visible (non-undone) strokes in order."""
@@ -129,6 +141,56 @@ class BoardState:
                     if not s.is_undone and len(s.points) > 0:
                         snapshot.append(s.to_dict())
             return snapshot
+
+    def save_to_disk(self):
+        """Saves current RAM state to disk JSON file."""
+        with self._lock:
+            try:
+                data = {
+                    "strokes": {sid: s.to_dict() for sid, s in self.strokes.items()},
+                    "stroke_order": self.stroke_order,
+                    "user_undo_stack": self.user_undo_stack,
+                    "user_redo_stack": self.user_redo_stack,
+                }
+                temp_file = f"{self.storage_path}.tmp"
+                with open(temp_file, "w", encoding="utf-8") as f:
+                    json.dump(data, f)
+                os.replace(temp_file, self.storage_path)
+                logger.info(f"Board state saved to disk ({len(self.strokes)} strokes).")
+            except Exception as e:
+                logger.error(f"Failed to save board state to disk: {e}")
+
+    def load_from_disk(self):
+        """Loads board state from disk JSON backup into RAM."""
+        with self._lock:
+            if not os.path.exists(self.storage_path):
+                return
+            try:
+                with open(self.storage_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self.strokes.clear()
+                self.stroke_order.clear()
+
+                strokes_dict = data.get("strokes", {})
+                for sid_str, s_dict in strokes_dict.items():
+                    sid = int(sid_str)
+                    stroke = Stroke(
+                        stroke_id=s_dict["id"],
+                        user_id=s_dict["user_id"],
+                        tool=s_dict["tool"],
+                        color=s_dict["color"],
+                        size=s_dict["size"],
+                        points=s_dict["points"],
+                    )
+                    stroke.is_undone = s_dict.get("undone", False)
+                    self.strokes[sid] = stroke
+
+                self.stroke_order = [int(sid) for sid in data.get("stroke_order", [])]
+                self.user_undo_stack = data.get("user_undo_stack", {})
+                self.user_redo_stack = data.get("user_redo_stack", {})
+                logger.info(f"Loaded {len(self.strokes)} strokes from disk backup ({self.storage_path}).")
+            except Exception as e:
+                logger.error(f"Failed to load board state from disk: {e}")
 
     def get_stats(self) -> Dict[str, Any]:
         with self._lock:

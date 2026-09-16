@@ -22,10 +22,19 @@ logger = logging.getLogger("livedraw")
 BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BASE_DIR / "static"
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    logger.info("Server shutting down. Flushing board state from RAM to disk...")
+    board_state.save_to_disk()
+
 app = FastAPI(
     title="LiveDraw - Real-time Collaborative Mobile Drawing Board",
     description="Ultra-low latency real-time collaborative whiteboard using WebRTC DataChannels and compact vector streaming.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS middleware for open deployment

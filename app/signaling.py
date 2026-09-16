@@ -167,6 +167,10 @@ class SignalingHub:
             del self.active_peers[user_id]
             logger.info(f"User {user_id} disconnected. Total peers: {len(self.active_peers)}")
             
+            if len(self.active_peers) == 0:
+                logger.info("All users left the board. Saving drawing state from RAM to disk...")
+                board_state.save_to_disk()
+
             leave_msg = json.dumps({
                 "type": "peer_left",
                 "user_id": user_id,
