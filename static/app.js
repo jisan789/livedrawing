@@ -148,7 +148,11 @@ document.addEventListener('DOMContentLoaded', () => {
             canvas.handleRemoteStrokeEnd(msg.strokeId);
             break;
           case 'stroke_text':
-            canvas.handleRemoteStrokeText(msg);
+            if (msg.isCommit) {
+              canvas.handleRemoteStrokeText(msg);
+            } else {
+              canvas.handleRemoteLiveText(msg);
+            }
             break;
           case 'stroke_undo':
             canvas.applyUndo(msg.strokeId);
@@ -280,7 +284,8 @@ document.addEventListener('DOMContentLoaded', () => {
         activeColor,
         activeBrushSize,
         pendingTextPos.x,
-        pendingTextPos.y
+        pendingTextPos.y,
+        false
       );
       if (net) {
         net.broadcastBinary(buffer, true);
@@ -323,7 +328,8 @@ document.addEventListener('DOMContentLoaded', () => {
         activeColor,
         activeBrushSize,
         pendingTextPos.x,
-        pendingTextPos.y
+        pendingTextPos.y,
+        true
       );
       if (net) {
         net.broadcastBinary(buffer, false);
@@ -358,7 +364,8 @@ document.addEventListener('DOMContentLoaded', () => {
           activeColor,
           activeBrushSize,
           pendingTextPos.x,
-          pendingTextPos.y
+          pendingTextPos.y,
+          false
         );
         net.broadcastBinary(buffer, true);
         net.sendServerMessage({
@@ -389,6 +396,30 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       commitDirectText();
     } else if (e.key === 'Escape') {
+      if (net && pendingTextPos) {
+        const buffer = Protocol.encodeStrokeText(
+          currentTextStrokeId,
+          currentUserId,
+          '',
+          activeColor,
+          activeBrushSize,
+          pendingTextPos.x,
+          pendingTextPos.y,
+          false
+        );
+        net.broadcastBinary(buffer, true);
+        net.sendServerMessage({
+          type: 'stroke_text_live',
+          stroke: {
+            id: currentTextStrokeId,
+            text: '',
+            color: activeColor,
+            size: activeBrushSize,
+            x: pendingTextPos.x,
+            y: pendingTextPos.y,
+          },
+        });
+      }
       directTextEditor.classList.add('hidden');
       directTextEditor.value = '';
       pendingTextPos = null;

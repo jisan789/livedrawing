@@ -162,27 +162,28 @@ class Protocol {
 
   /**
    * Encode STROKE_TEXT
-   * Type(1) | StrokeId(4) | R(1) | G(1) | B(1) | Size(2) | X(2) | Y(2) | TextLen(2) | TextBytes(N) | UidLen(1) | Uid(M)
+   * Type(1) | StrokeId(4) | IsCommit(1) | R(1) | G(1) | B(1) | Size(2) | X(2) | Y(2) | TextLen(2) | TextBytes(N) | UidLen(1) | Uid(M)
    */
-  static encodeStrokeText(strokeId, userId, text, colorHex, size, x, y) {
+  static encodeStrokeText(strokeId, userId, text, colorHex, size, x, y, isCommit = false) {
     const textBytes = this.textEncoder.encode(text || '');
     const uidBytes = this.textEncoder.encode(userId || '');
     const rgb = this.hexToRgb(colorHex || '#000000');
-    const buffer = new ArrayBuffer(17 + textBytes.length + uidBytes.length);
+    const buffer = new ArrayBuffer(18 + textBytes.length + uidBytes.length);
     const view = new DataView(buffer);
 
     view.setUint8(0, MsgType.STROKE_TEXT);
     view.setUint32(1, strokeId, false);
-    view.setUint8(5, rgb.r);
-    view.setUint8(6, rgb.g);
-    view.setUint8(7, rgb.b);
-    view.setUint16(8, Math.round(size * 10), false);
-    view.setUint16(10, Math.round(x), false);
-    view.setUint16(12, Math.round(y), false);
-    view.setUint16(14, textBytes.length, false);
-    new Uint8Array(buffer).set(textBytes, 16);
+    view.setUint8(5, isCommit ? 1 : 0);
+    view.setUint8(6, rgb.r);
+    view.setUint8(7, rgb.g);
+    view.setUint8(8, rgb.b);
+    view.setUint16(9, Math.round(size * 10), false);
+    view.setUint16(11, Math.round(x), false);
+    view.setUint16(13, Math.round(y), false);
+    view.setUint16(15, textBytes.length, false);
+    new Uint8Array(buffer).set(textBytes, 17);
 
-    const uidOffset = 16 + textBytes.length;
+    const uidOffset = 17 + textBytes.length;
     view.setUint8(uidOffset, uidBytes.length);
     new Uint8Array(buffer).set(uidBytes, uidOffset + 1);
 
@@ -342,17 +343,18 @@ class Protocol {
 
       case MsgType.STROKE_TEXT: {
         const strokeId = view.getUint32(1, false);
-        const r = view.getUint8(5);
-        const g = view.getUint8(6);
-        const b = view.getUint8(7);
-        const size = view.getUint16(8, false) / 10;
-        const x = view.getUint16(10, false);
-        const y = view.getUint16(12, false);
-        const textLen = view.getUint16(14, false);
-        const textBytes = new Uint8Array(arrayBuffer, 16, textLen);
+        const isCommit = view.getUint8(5) === 1;
+        const r = view.getUint8(6);
+        const g = view.getUint8(7);
+        const b = view.getUint8(8);
+        const size = view.getUint16(9, false) / 10;
+        const x = view.getUint16(11, false);
+        const y = view.getUint16(13, false);
+        const textLen = view.getUint16(15, false);
+        const textBytes = new Uint8Array(arrayBuffer, 17, textLen);
         const text = this.textDecoder.decode(textBytes);
 
-        const uidOffset = 16 + textLen;
+        const uidOffset = 17 + textLen;
         const uidLen = view.getUint8(uidOffset);
         const uidBytes = new Uint8Array(arrayBuffer, uidOffset + 1, uidLen);
         const userId = this.textDecoder.decode(uidBytes);
@@ -362,6 +364,7 @@ class Protocol {
           strokeId,
           userId,
           tool: 2,
+          isCommit,
           color: this.rgbToHex(r, g, b),
           size,
           text,
