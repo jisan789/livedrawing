@@ -1,6 +1,6 @@
 /**
  * LiveDraw Main Application Coordinator
- * Connects Canvas, WebRTC DataChannels, Protocol, and Mobile UI.
+ * Connects Canvas, WebRTC DataChannels, Protocol, Text Tool, and Mobile UI.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -21,9 +21,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const nameModalTitle = document.getElementById('name-modal-title');
   const nameModalSubtitle = document.getElementById('name-modal-subtitle');
 
+  // Inline Text Box
+  const inlineTextOverlay = document.getElementById('inline-text-overlay');
+  const inlineTextInput = document.getElementById('inline-text-input');
+  const btnCommitText = document.getElementById('btn-commit-text');
+
   // Tool Buttons
   const toolPen = document.getElementById('tool-pen');
   const toolEraser = document.getElementById('tool-eraser');
+  const toolText = document.getElementById('tool-text');
   const btnColorTrigger = document.getElementById('btn-color-trigger');
   const btnSizeTrigger = document.getElementById('btn-size-trigger');
   const btnUndo = document.getElementById('btn-undo');
@@ -43,11 +49,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let currentUserId = 'ME';
   let currentUserColor = '#3b82f6';
-  let activeTool = 0; // 0 = Pen, 1 = Eraser
+  let activeTool = 0; // 0 = Pen, 1 = Eraser, 2 = Text
   let activeColor = '#1e1e1e';
   let activeBrushSize = 2;
   let net = null;
   let canvas = null;
+  let pendingTextPos = null;
 
   // Nickname Generators
   const ADJECTIVES = ['Creative', 'Swift', 'Bright', 'Cosmic', 'Neon', 'Velvet', 'Lunar', 'Solar', 'Epic', 'Wild'];
@@ -67,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let savedUsername = localStorage.getItem('livedraw_username');
 
   function initApp(chosenName) {
-    if (net) return; // Already initialized
+    if (net) return;
 
     currentUserId = chosenName || generateRandomName();
     myUserIdDisplay.textContent = `YOU (${currentUserId})`;
@@ -134,6 +141,9 @@ document.addEventListener('DOMContentLoaded', () => {
             break;
           case 'stroke_end':
             canvas.handleRemoteStrokeEnd(msg.strokeId);
+            break;
+          case 'stroke_text':
+            canvas.handleRemoteStrokeText(msg);
             break;
           case 'stroke_undo':
             canvas.applyUndo(msg.strokeId);
@@ -217,10 +227,116 @@ document.addEventListener('DOMContentLoaded', () => {
         const buffer = Protocol.encodeCursorMove(currentUserId, normX, normY, isDrawing);
         net.broadcastBinary(buffer, true);
       },
+
+      onTextRequest: (pos) => {
+        openInlineText(pos);
+      },
     });
   }
 
-  // First-time modal or rename modal logic
+  // =========================================================================
+  // Inline Text Tool Interaction
+  // =========================================================================
+
+  function openInlineText(pos) {
+    if (pendingTextPos) {
+      commitInlineText();
+    }
+    pendingTextPos = pos;
+
+    const rect = container.getBoundingClientRect();
+    let left = pos.clientX - rect.left;
+    let top = pos.clientY - rect.top;
+
+    // Boundary protection for mobile edges
+    const maxLeft = rect.width - 200;
+    const maxTop = rect.height - 80;
+    left = Math.max(10, Math.min(maxLeft, left));
+    top = Math.max(10, Math.min(maxTop, top));
+
+    inlineTextOverlay.style.left = `${left}px`;
+    inlineTextOverlay.style.top = `${top}px`;
+    inlineTextInput.value = '';
+    inlineTextInput.style.color = activeColor;
+    inlineTextOverlay.classList.remove('hidden');
+
+    setTimeout(() => inlineTextInput.focus(), 50);
+  }
+
+  function commitInlineText() {
+    if (!pendingTextPos) return;
+
+    const text = inlineTextInput.value.trim();
+    if (text) {
+      const strokeId = (Date.now() & 0x7fffffff) ^ Math.floor(Math.random() * 100000);
+      const textStroke = {
+        id: strokeId,
+        userId: currentUserId,
+        tool: 2,
+        text,
+        color: activeColor,
+        size: activeBrushSize,
+        points: [[pendingTextPos.x, pendingTextPos.y]],
+        undone: false,
+      };
+
+      // Broadcast binary
+      const buffer = Protocol.encodeStrokeText(
+        strokeId,
+        currentUserId,
+        text,
+        activeColor,
+        activeBrushSize,
+        pendingTextPos.x,
+        pendingTextPos.y
+      );
+      if (net) {
+        net.broadcastBinary(buffer, false);
+        net.sendServerMessage({
+          type: 'stroke_text',
+          stroke: {
+            id: strokeId,
+            text,
+            color: activeColor,
+            size: activeBrushSize,
+            x: pendingTextPos.x,
+            y: pendingTextPos.y,
+          },
+        });
+      }
+
+      // Add to local canvas
+      if (canvas) {
+        canvas.committedStrokes.set(strokeId, textStroke);
+        canvas.strokeOrder.push(strokeId);
+        canvas.renderStrokeToBase(textStroke);
+      }
+    }
+
+    inlineTextOverlay.classList.add('hidden');
+    inlineTextInput.value = '';
+    pendingTextPos = null;
+  }
+
+  btnCommitText.addEventListener('click', (e) => {
+    e.stopPropagation();
+    commitInlineText();
+  });
+
+  inlineTextInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitInlineText();
+    } else if (e.key === 'Escape') {
+      inlineTextOverlay.classList.add('hidden');
+      pendingTextPos = null;
+    }
+  });
+
+  // =========================================================================
+  // First-time / Rename Modal
+  // =========================================================================
+
   function showNameModal(isRename = false) {
     if (isRename) {
       nameModalTitle.textContent = 'Change Display Name';
@@ -261,7 +377,6 @@ document.addEventListener('DOMContentLoaded', () => {
     showNameModal(true);
   });
 
-  // If already has saved username in browser, jump straight in; otherwise ask first time!
   if (savedUsername && savedUsername.trim()) {
     initApp(savedUsername.trim());
   } else {
@@ -276,12 +391,12 @@ document.addEventListener('DOMContentLoaded', () => {
     activeTool = toolIndex;
     if (canvas) canvas.setTool(toolIndex);
 
-    if (toolIndex === 0) {
-      toolPen.classList.add('active');
-      toolEraser.classList.remove('active');
-    } else {
-      toolEraser.classList.add('active');
-      toolPen.classList.remove('active');
+    toolPen.classList.toggle('active', toolIndex === 0);
+    toolEraser.classList.toggle('active', toolIndex === 1);
+    if (toolText) toolText.classList.toggle('active', toolIndex === 2);
+
+    if (toolIndex !== 2 && pendingTextPos) {
+      commitInlineText();
     }
     closeTrays();
   }
@@ -291,6 +406,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (canvas) canvas.setColor(hex);
     activeColorIndicator.style.backgroundColor = hex;
     sizePreviewDot.style.backgroundColor = hex;
+    inlineTextInput.style.color = hex;
 
     colorSwatches.forEach(s => {
       if (s.dataset.color.toLowerCase() === hex.toLowerCase()) {
@@ -323,6 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Event Listeners for UI
   toolPen.addEventListener('click', () => selectTool(0));
   toolEraser.addEventListener('click', () => selectTool(1));
+  if (toolText) toolText.addEventListener('click', () => selectTool(2));
 
   btnColorTrigger.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -357,16 +474,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // Undo / Redo / Clear
   btnUndo.addEventListener('click', () => {
     closeTrays();
+    if (pendingTextPos) commitInlineText();
     if (net) net.sendServerMessage({ type: 'stroke_undo' });
   });
 
   btnRedo.addEventListener('click', () => {
     closeTrays();
+    if (pendingTextPos) commitInlineText();
     if (net) net.sendServerMessage({ type: 'stroke_redo' });
   });
 
   btnClear.addEventListener('click', () => {
     closeTrays();
+    if (pendingTextPos) commitInlineText();
     if (confirm('Clear the shared whiteboard for everyone?')) {
       const buffer = Protocol.encodeBoardClear(currentUserId);
       if (net) {
@@ -395,6 +515,8 @@ document.addEventListener('DOMContentLoaded', () => {
       selectTool(0);
     } else if (e.key.toLowerCase() === 'e') {
       selectTool(1);
+    } else if (e.key.toLowerCase() === 't') {
+      selectTool(2);
     }
   });
 

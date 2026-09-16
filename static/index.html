@@ -56,6 +56,12 @@
       <canvas id="base-canvas" class="drawing-layer"></canvas>
       <canvas id="active-canvas" class="drawing-layer"></canvas>
       <canvas id="cursor-canvas" class="drawing-layer"></canvas>
+
+      <!-- Floating Inline Text Editor -->
+      <div id="inline-text-overlay" class="inline-text-box hidden">
+        <input type="text" id="inline-text-input" placeholder="Type text..." autocomplete="off" autocorrect="off">
+        <button type="button" id="btn-commit-text" class="text-commit-btn" title="Add text">✓</button>
+      </div>
     </main>
 
     <!-- Floating Color Picker Tray -->
@@ -111,6 +117,16 @@
             <path d="m5 11 9 9"></path>
           </svg>
           <span class="tool-label">Eraser</span>
+        </button>
+
+        <!-- Text Tool -->
+        <button id="tool-text" class="tool-btn" title="Text" aria-label="Text Tool">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="4 7 4 4 20 4 20 7"></polyline>
+            <line x1="9" y1="20" x2="15" y2="20"></line>
+            <line x1="12" y1="4" x2="12" y2="20"></line>
+          </svg>
+          <span class="tool-label">Text</span>
         </button>
 
         <div class="tool-divider"></div>

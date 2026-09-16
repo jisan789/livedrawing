@@ -19,9 +19,10 @@ class DrawingCanvas {
     this.onStrokeChunk = options.onStrokeChunk || (() => {});
     this.onStrokeEnd = options.onStrokeEnd || (() => {});
     this.onCursorMove = options.onCursorMove || (() => {});
+    this.onTextRequest = options.onTextRequest || (() => {});
 
     // Drawing settings
-    this.tool = 0; // 0 = Pen, 1 = Eraser
+    this.tool = 0; // 0 = Pen, 1 = Eraser, 2 = Text
     this.color = '#1e1e1e';
     this.brushSize = 2;
     this.userId = options.userId || 'ME';
@@ -121,12 +122,19 @@ class DrawingCanvas {
     e.preventDefault();
     if (e.button !== undefined && e.button !== 0) return; // Only primary button
 
+    const [normX, normY] = this.toNormalized(e.clientX, e.clientY);
+
+    // Text tool tap handler
+    if (this.tool === 2) {
+      this.onTextRequest({ x: normX, y: normY, clientX: e.clientX, clientY: e.clientY });
+      return;
+    }
+
     this.cursorCanvas.setPointerCapture(e.pointerId);
     this.isDrawing = true;
     this.currentStrokeId = (Date.now() & 0x7fffffff) ^ Math.floor(Math.random() * 100000);
     this.currentSeq = 0;
 
-    const [normX, normY] = this.toNormalized(e.clientX, e.clientY);
     this.localPoints = [[normX, normY]];
     this.pendingPoints = [];
     this.rawPointCount++;
@@ -335,6 +343,19 @@ class DrawingCanvas {
     const pts = stroke.points;
     if (!pts || pts.length === 0) return;
 
+    // Render Text Element
+    if (stroke.tool === 2 && stroke.text) {
+      const [sx, sy] = this.toScreen(pts[0][0], pts[0][1]);
+      const fontSize = Math.max(14, Math.round((stroke.size || 2) * 6));
+      ctx.save();
+      ctx.font = `600 ${fontSize}px 'Outfit', -apple-system, sans-serif`;
+      ctx.fillStyle = stroke.color || '#1e1e1e';
+      ctx.textBaseline = 'top';
+      ctx.fillText(stroke.text, sx, sy);
+      ctx.restore();
+      return;
+    }
+
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -409,6 +430,22 @@ class DrawingCanvas {
   // Board State Sync & Mutations (Undo, Redo, Clear, Initial Snapshot)
   // =========================================================================
 
+  handleRemoteStrokeText(data) {
+    const stroke = {
+      id: data.strokeId,
+      userId: data.userId,
+      tool: 2,
+      text: data.text,
+      color: data.color,
+      size: data.size,
+      points: [data.point],
+      undone: false,
+    };
+    this.committedStrokes.set(stroke.id, stroke);
+    this.strokeOrder.push(stroke.id);
+    this.renderStrokeToBase(stroke);
+  }
+
   loadSnapshot(strokesList) {
     this.committedStrokes.clear();
     this.strokeOrder = [];
@@ -421,6 +458,7 @@ class DrawingCanvas {
           color: s.color,
           size: s.size,
           points: s.points,
+          text: s.text,
           undone: s.undone || false,
         };
         this.committedStrokes.set(strokeObj.id, strokeObj);
