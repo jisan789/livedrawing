@@ -16,13 +16,14 @@ class MsgType(IntEnum):
     PING = 0x08
     PONG = 0x09
     STROKE_TEXT = 0x0A
+    STROKE_MOVE = 0x0B
     BOARD_SYNC_REQUEST = 0x10
     BOARD_SYNC_RESPONSE = 0x11
 
 class ToolType(IntEnum):
     PEN = 0
     ERASER = 1
-    TEXT = 2
+    SELECT = 2
 
 # Coordinate scale for 0..10000 normalization
 COORD_SCALE = 10000

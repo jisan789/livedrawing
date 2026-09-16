@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Tool Buttons
   const toolPen = document.getElementById('tool-pen');
   const toolEraser = document.getElementById('tool-eraser');
+  const toolSelect = document.getElementById('tool-select');
   const btnColorTrigger = document.getElementById('btn-color-trigger');
   const btnSizeTrigger = document.getElementById('btn-size-trigger');
   const btnUndo = document.getElementById('btn-undo');
@@ -141,6 +142,9 @@ document.addEventListener('DOMContentLoaded', () => {
           case 'stroke_redo':
             canvas.applyRedo(msg.strokeId);
             break;
+          case 'stroke_move':
+            canvas.applyStrokeMove(msg.strokeId, msg.dx, msg.dy);
+            break;
           case 'board_clear':
             canvas.clearBoard();
             showToast('Board cleared');
@@ -149,6 +153,10 @@ document.addEventListener('DOMContentLoaded', () => {
             canvas.handleRemoteCursor(msg);
             break;
         }
+      },
+
+      onStrokeMove: (msg) => {
+        if (canvas) canvas.applyStrokeMove(msg.stroke_id, msg.dx, msg.dy);
       },
 
       onBoardUndo: (strokeId) => {
@@ -210,6 +218,17 @@ document.addEventListener('DOMContentLoaded', () => {
         net.sendServerMessage({
           type: 'stroke_end',
           stroke_id: strokeId,
+        });
+      },
+
+      onStrokeMove: (strokeId, dx, dy) => {
+        const buffer = Protocol.encodeStrokeMove(strokeId, currentUserId, dx, dy);
+        net.broadcastBinary(buffer, false);
+        net.sendServerMessage({
+          type: 'stroke_move',
+          stroke_id: strokeId,
+          dx,
+          dy,
         });
       },
 
@@ -280,6 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     toolPen.classList.toggle('active', toolIndex === 0);
     toolEraser.classList.toggle('active', toolIndex === 1);
+    if (toolSelect) toolSelect.classList.toggle('active', toolIndex === 2);
     closeTrays();
   }
 
@@ -320,6 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Event Listeners for UI
   toolPen.addEventListener('click', () => selectTool(0));
   toolEraser.addEventListener('click', () => selectTool(1));
+  if (toolSelect) toolSelect.addEventListener('click', () => selectTool(2));
 
   btnColorTrigger.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -392,6 +413,8 @@ document.addEventListener('DOMContentLoaded', () => {
       selectTool(0);
     } else if (e.key.toLowerCase() === 'e') {
       selectTool(1);
+    } else if (e.key.toLowerCase() === 's' || e.key.toLowerCase() === 'v') {
+      selectTool(2);
     }
   });
 

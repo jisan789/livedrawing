@@ -30,6 +30,7 @@ class WebRTCManager {
     this.onBoardUndo = options.onBoardUndo || (() => {});
     this.onBoardRedo = options.onBoardRedo || (() => {});
     this.onBoardClear = options.onBoardClear || (() => {});
+    this.onStrokeMove = options.onStrokeMove || (() => {});
     this.onStatsUpdate = options.onStatsUpdate || (() => {});
 
     this.init();
@@ -143,6 +144,10 @@ class WebRTCManager {
 
       case 'signal':
         this.handlePeerSignal(msg.sender, msg.data);
+        break;
+
+      case 'stroke_move':
+        this.onStrokeMove(msg);
         break;
 
       case 'board_undo':

@@ -77,6 +77,16 @@ class BoardState:
             if stroke_id in self.strokes:
                 self.strokes[stroke_id].is_finished = True
 
+    def move_stroke(self, stroke_id: int, dx: int, dy: int) -> bool:
+        with self._lock:
+            if stroke_id in self.strokes:
+                stroke = self.strokes[stroke_id]
+                for pt in stroke.points:
+                    pt[0] = max(0, min(10000, pt[0] + dx))
+                    pt[1] = max(0, min(10000, pt[1] + dy))
+                return True
+            return False
+
     def undo(self, user_id: str) -> Optional[int]:
         """Undoes the last active stroke by the user."""
         with self._lock:

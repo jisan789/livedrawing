@@ -14,6 +14,7 @@ const MsgType = {
   PING: 0x08,
   PONG: 0x09,
   STROKE_TEXT: 0x0A,
+  STROKE_MOVE: 0x0B,
 };
 
 const COORD_SCALE = 10000;
@@ -157,6 +158,23 @@ class Protocol {
     view.setUint8(5, isDrawing ? 1 : 0);
     view.setUint8(6, uidBytes.length);
     new Uint8Array(buffer).set(uidBytes, 7);
+    return buffer;
+  }
+
+  /**
+   * Encode STROKE_MOVE
+   * Type(1) | StrokeId(4) | dX(2) | dY(2) | UidLen(1) | Uid(N)
+   */
+  static encodeStrokeMove(strokeId, userId, dx, dy) {
+    const uidBytes = this.textEncoder.encode(userId || '');
+    const buffer = new ArrayBuffer(10 + uidBytes.length);
+    const view = new DataView(buffer);
+    view.setUint8(0, MsgType.STROKE_MOVE);
+    view.setUint32(1, strokeId, false);
+    view.setInt16(5, Math.round(dx), false);
+    view.setInt16(7, Math.round(dy), false);
+    view.setUint8(9, uidBytes.length);
+    new Uint8Array(buffer).set(uidBytes, 10);
     return buffer;
   }
 
@@ -369,6 +387,22 @@ class Protocol {
           size,
           text,
           point: [x, y],
+        };
+      }
+
+      case MsgType.STROKE_MOVE: {
+        const strokeId = view.getUint32(1, false);
+        const dx = view.getInt16(5, false);
+        const dy = view.getInt16(7, false);
+        const uidLen = view.getUint8(9);
+        const uidBytes = new Uint8Array(arrayBuffer, 10, uidLen);
+        const userId = this.textDecoder.decode(uidBytes);
+        return {
+          type: 'stroke_move',
+          strokeId,
+          dx,
+          dy,
+          userId,
         };
       }
 
