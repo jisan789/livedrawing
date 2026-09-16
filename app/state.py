@@ -83,19 +83,24 @@ class BoardState:
         with self._lock:
             if stroke_id in self.strokes:
                 self.strokes[stroke_id].is_finished = True
+        self.save_to_disk()
 
     def move_stroke(self, stroke_id: int, dx: int, dy: int) -> bool:
+        moved = False
         with self._lock:
             if stroke_id in self.strokes:
                 stroke = self.strokes[stroke_id]
                 for pt in stroke.points:
                     pt[0] = max(0, min(10000, pt[0] + dx))
                     pt[1] = max(0, min(10000, pt[1] + dy))
-                return True
-            return False
+                moved = True
+        if moved:
+            self.save_to_disk()
+        return moved
 
     def undo(self, user_id: str) -> Optional[int]:
         """Undoes the last active stroke by the user."""
+        undone_sid = None
         with self._lock:
             stack = self.user_undo_stack.get(user_id, [])
             while stack:
@@ -103,11 +108,15 @@ class BoardState:
                 if sid in self.strokes and not self.strokes[sid].is_undone:
                     self.strokes[sid].is_undone = True
                     self.user_redo_stack.setdefault(user_id, []).append(sid)
-                    return sid
-            return None
+                    undone_sid = sid
+                    break
+        if undone_sid:
+            self.save_to_disk()
+        return undone_sid
 
     def redo(self, user_id: str) -> Optional[int]:
         """Redoes the last undone stroke by the user."""
+        redone_sid = None
         with self._lock:
             stack = self.user_redo_stack.get(user_id, [])
             while stack:
@@ -115,21 +124,20 @@ class BoardState:
                 if sid in self.strokes and self.strokes[sid].is_undone:
                     self.strokes[sid].is_undone = False
                     self.user_undo_stack.setdefault(user_id, []).append(sid)
-                    return sid
-            return None
+                    redone_sid = sid
+                    break
+        if redone_sid:
+            self.save_to_disk()
+        return redone_sid
 
     def clear(self, user_id: Optional[str] = None):
-        """Clears the board and removes disk backup."""
+        """Clears the board and updates disk state."""
         with self._lock:
             self.strokes.clear()
             self.stroke_order.clear()
             self.user_undo_stack.clear()
             self.user_redo_stack.clear()
-            if os.path.exists(self.storage_path):
-                try:
-                    os.remove(self.storage_path)
-                except Exception:
-                    pass
+        self.save_to_disk()
 
     def get_snapshot(self) -> List[Dict[str, Any]]:
         """Returns all visible (non-undone) strokes in order."""
@@ -151,19 +159,28 @@ class BoardState:
                     "stroke_order": self.stroke_order,
                     "user_undo_stack": self.user_undo_stack,
                     "user_redo_stack": self.user_redo_stack,
+                    "saved_at": time.time(),
                 }
                 temp_file = f"{self.storage_path}.tmp"
                 with open(temp_file, "w", encoding="utf-8") as f:
                     json.dump(data, f)
                 os.replace(temp_file, self.storage_path)
-                logger.info(f"Board state saved to disk ({len(self.strokes)} strokes).")
+
+                visible_strokes = sum(1 for s in self.strokes.values() if not s.is_undone)
+                total_points = sum(len(s.points) for s in self.strokes.values() if not s.is_undone)
+                log_msg = f"[BOARD SAVE] Saved {visible_strokes} active strokes ({total_points} points) to disk file '{self.storage_path}'."
+                logger.info(log_msg)
+                print(log_msg, flush=True)
             except Exception as e:
-                logger.error(f"Failed to save board state to disk: {e}")
+                logger.error(f"[BOARD SAVE ERROR] Failed to save board state to disk: {e}")
 
     def load_from_disk(self):
         """Loads board state from disk JSON backup into RAM."""
         with self._lock:
             if not os.path.exists(self.storage_path):
+                log_msg = f"[BOARD RESTORE] No existing backup found at '{self.storage_path}'. Starting with fresh board."
+                logger.info(log_msg)
+                print(log_msg, flush=True)
                 return
             try:
                 with open(self.storage_path, "r", encoding="utf-8") as f:
@@ -188,9 +205,14 @@ class BoardState:
                 self.stroke_order = [int(sid) for sid in data.get("stroke_order", [])]
                 self.user_undo_stack = data.get("user_undo_stack", {})
                 self.user_redo_stack = data.get("user_redo_stack", {})
-                logger.info(f"Loaded {len(self.strokes)} strokes from disk backup ({self.storage_path}).")
+
+                visible_strokes = sum(1 for s in self.strokes.values() if not s.is_undone)
+                total_points = sum(len(s.points) for s in self.strokes.values() if not s.is_undone)
+                log_msg = f"[BOARD RESTORE] Restored {visible_strokes} active strokes ({total_points} points) from disk file '{self.storage_path}'."
+                logger.info(log_msg)
+                print(log_msg, flush=True)
             except Exception as e:
-                logger.error(f"Failed to load board state from disk: {e}")
+                logger.error(f"[BOARD RESTORE ERROR] Failed to load board state from disk: {e}")
 
     def get_stats(self) -> Dict[str, Any]:
         with self._lock:
