@@ -1,10 +1,10 @@
 """
 LiveDraw WebRTC Signaling & WebSocket Hub
-Manages connected peers, forwards SDP offers/answers, ICE candidates, and manages board state sync.
+Manages connected peers, unique usernames, forwards SDP offers/answers, ICE candidates, and manages board state sync.
 """
 
 from fastapi import WebSocket, WebSocketDisconnect
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import json
 import secrets
 import logging
@@ -31,19 +31,33 @@ class SignalingHub:
     def get_peer_count(self) -> int:
         return len(self.active_peers)
 
-    def generate_user_id(self) -> str:
+    def ensure_unique_name(self, requested_name: Optional[str], exclude_id: Optional[str] = None) -> str:
+        """Ensures a unique, clean username among active peers."""
+        if not requested_name or not requested_name.strip():
+            while True:
+                candidate = f"Artist_{secrets.token_hex(2).upper()}"
+                if candidate not in self.active_peers and candidate != exclude_id:
+                    return candidate
+
+        clean_name = requested_name.strip()[:20]
+        if clean_name not in self.active_peers or clean_name == exclude_id:
+            return clean_name
+
+        # If taken, append incremental suffix
+        suffix = 2
         while True:
-            uid = secrets.token_hex(2).upper()
-            if uid not in self.active_peers:
-                return uid
+            candidate = f"{clean_name}_{suffix}"
+            if candidate not in self.active_peers and candidate != exclude_id:
+                return candidate
+            suffix += 1
 
     def pick_color(self) -> str:
         idx = len(self.active_peers) % len(USER_COLORS)
         return USER_COLORS[idx]
 
-    async def connect(self, websocket: WebSocket) -> Peer:
+    async def connect(self, websocket: WebSocket, requested_name: Optional[str] = None) -> Peer:
         await websocket.accept()
-        user_id = self.generate_user_id()
+        user_id = self.ensure_unique_name(requested_name)
         color = self.pick_color()
         peer = Peer(user_id, websocket, color)
         
@@ -84,6 +98,43 @@ class SignalingHub:
 
         return peer
 
+    async def rename_peer(self, old_user_id: str, new_requested_name: str) -> str:
+        if old_user_id not in self.active_peers:
+            return old_user_id
+
+        peer = self.active_peers[old_user_id]
+        final_new_name = self.ensure_unique_name(new_requested_name, exclude_id=old_user_id)
+        if final_new_name == old_user_id:
+            return old_user_id
+
+        # Update peer map key
+        del self.active_peers[old_user_id]
+        peer.user_id = final_new_name
+        self.active_peers[final_new_name] = peer
+
+        # Confirm to client
+        await peer.websocket.send_text(json.dumps({
+            "type": "username_confirmed",
+            "user_id": final_new_name,
+        }))
+
+        # Broadcast rename to other peers
+        rename_msg = json.dumps({
+            "type": "peer_renamed",
+            "old_user_id": old_user_id,
+            "new_user_id": final_new_name,
+            "color": peer.color,
+            "user_count": len(self.active_peers),
+        })
+        for pid, p in self.active_peers.items():
+            if pid != final_new_name:
+                try:
+                    await p.websocket.send_text(rename_msg)
+                except Exception:
+                    pass
+
+        return final_new_name
+
     async def disconnect(self, user_id: str):
         if user_id in self.active_peers:
             del self.active_peers[user_id]
@@ -100,23 +151,30 @@ class SignalingHub:
                 except Exception:
                     pass
 
-    async def handle_message(self, sender_id: str, raw_data: Any):
+    async def handle_message(self, sender_id: str, raw_data: Any) -> str:
+        current_sender_id = sender_id
         # Support both text (JSON) signaling and binary sync
         if isinstance(raw_data, str):
             try:
                 msg = json.loads(raw_data)
             except json.JSONDecodeError:
-                return
+                return current_sender_id
 
             mtype = msg.get("type")
 
-            # 1. WebRTC Signaling Forwarding (Offer, Answer, ICE Candidate)
-            if mtype == "signal":
+            # 0. User rename
+            if mtype == "set_username":
+                req_name = msg.get("username")
+                if req_name:
+                    current_sender_id = await self.rename_peer(sender_id, req_name)
+
+            # 1. WebRTC Signaling Forwarding
+            elif mtype == "signal":
                 target_id = msg.get("target")
                 if target_id and target_id in self.active_peers:
                     forward_msg = json.dumps({
                         "type": "signal",
-                        "sender": sender_id,
+                        "sender": current_sender_id,
                         "data": msg.get("data"),
                     })
                     try:
@@ -130,7 +188,7 @@ class SignalingHub:
                 if s:
                     board_state.start_stroke(
                         stroke_id=s["id"],
-                        user_id=sender_id,
+                        user_id=current_sender_id,
                         tool=s.get("tool", 0),
                         color=s.get("color", "#000000"),
                         size=s.get("size", 3.0),
@@ -150,11 +208,10 @@ class SignalingHub:
                     board_state.end_stroke(sid)
 
             elif mtype == "stroke_undo":
-                undone_sid = board_state.undo(sender_id)
-                # Broadcast undo confirmation to all peers (ensures absolute consistency)
+                undone_sid = board_state.undo(current_sender_id)
                 undo_msg = json.dumps({
                     "type": "board_undo",
-                    "user_id": sender_id,
+                    "user_id": current_sender_id,
                     "stroke_id": undone_sid,
                 })
                 for p in self.active_peers.values():
@@ -164,10 +221,10 @@ class SignalingHub:
                         pass
 
             elif mtype == "stroke_redo":
-                redone_sid = board_state.redo(sender_id)
+                redone_sid = board_state.redo(current_sender_id)
                 redo_msg = json.dumps({
                     "type": "board_redo",
-                    "user_id": sender_id,
+                    "user_id": current_sender_id,
                     "stroke_id": redone_sid,
                 })
                 for p in self.active_peers.values():
@@ -177,10 +234,10 @@ class SignalingHub:
                         pass
 
             elif mtype == "board_clear":
-                board_state.clear(sender_id)
+                board_state.clear(current_sender_id)
                 clear_msg = json.dumps({
                     "type": "board_clear",
-                    "user_id": sender_id,
+                    "user_id": current_sender_id,
                 })
                 for p in self.active_peers.values():
                     try:
@@ -189,12 +246,13 @@ class SignalingHub:
                         pass
 
             elif mtype == "ping":
-                # Instant ping-pong latency response
                 pong_msg = json.dumps({
                     "type": "pong",
                     "client_time": msg.get("client_time"),
                 })
-                if sender_id in self.active_peers:
-                    await self.active_peers[sender_id].websocket.send_text(pong_msg)
+                if current_sender_id in self.active_peers:
+                    await self.active_peers[current_sender_id].websocket.send_text(pong_msg)
+
+        return current_sender_id
 
 signaling_hub = SignalingHub()

@@ -8,8 +8,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const container = document.getElementById('canvas-container');
   const userCountDisplay = document.getElementById('user-count-display');
   const latencyDisplay = document.getElementById('latency-display');
+  const myUserTag = document.getElementById('my-user-tag');
   const myUserIdDisplay = document.getElementById('my-user-id');
   const myUserDot = document.getElementById('my-user-dot');
+
+  // Name Modal Elements
+  const nameModal = document.getElementById('name-modal');
+  const nameForm = document.getElementById('name-form');
+  const usernameInput = document.getElementById('username-input');
+  const btnRandomName = document.getElementById('btn-random-name');
+  const btnSaveName = document.getElementById('btn-save-name');
+  const nameModalTitle = document.getElementById('name-modal-title');
+  const nameModalSubtitle = document.getElementById('name-modal-subtitle');
 
   // Tool Buttons
   const toolPen = document.getElementById('tool-pen');
@@ -36,135 +46,227 @@ document.addEventListener('DOMContentLoaded', () => {
   let activeTool = 0; // 0 = Pen, 1 = Eraser
   let activeColor = '#1e1e1e';
   let activeBrushSize = 4;
+  let net = null;
+  let canvas = null;
 
-  // Initialize WebRTC Manager
-  const net = new WebRTCManager({
-    onWelcome: (msg) => {
-      currentUserId = msg.user_id;
-      currentUserColor = msg.color;
-      myUserIdDisplay.textContent = `YOU (${currentUserId})`;
-      myUserDot.style.backgroundColor = currentUserColor;
-      userCountDisplay.textContent = `${msg.user_count} ${msg.user_count === 1 ? 'USER' : 'USERS'}`;
+  // Nickname Generators
+  const ADJECTIVES = ['Creative', 'Swift', 'Bright', 'Cosmic', 'Neon', 'Velvet', 'Lunar', 'Solar', 'Epic', 'Wild'];
+  const NOUNS = ['Artist', 'Fox', 'Hawk', 'Doodle', 'Painter', 'Pixel', 'Pencil', 'Spark', 'Comet', 'Wave'];
 
-      if (canvas) {
-        canvas.userId = currentUserId;
-        if (msg.board) {
-          canvas.loadSnapshot(msg.board);
+  function generateRandomName() {
+    const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+    const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+    const num = Math.floor(100 + Math.random() * 900);
+    return `${adj}${noun}_${num}`;
+  }
+
+  // =========================================================================
+  // Username & LocalStorage Management
+  // =========================================================================
+
+  let savedUsername = localStorage.getItem('livedraw_username');
+
+  function initApp(chosenName) {
+    if (net) return; // Already initialized
+
+    currentUserId = chosenName || generateRandomName();
+    myUserIdDisplay.textContent = `YOU (${currentUserId})`;
+
+    // Initialize WebRTC Manager
+    net = new WebRTCManager({
+      requestedUsername: currentUserId,
+
+      onWelcome: (msg) => {
+        currentUserId = msg.user_id;
+        currentUserColor = msg.color;
+        localStorage.setItem('livedraw_username', currentUserId);
+        myUserIdDisplay.textContent = `YOU (${currentUserId})`;
+        myUserDot.style.backgroundColor = currentUserColor;
+        userCountDisplay.textContent = `${msg.user_count} ${msg.user_count === 1 ? 'USER' : 'USERS'}`;
+
+        if (canvas) {
+          canvas.userId = currentUserId;
+          if (msg.board) {
+            canvas.loadSnapshot(msg.board);
+          }
         }
-      }
-      showToast(`Connected as User ${currentUserId}`);
-    },
+        showToast(`Connected as ${currentUserId}`);
+      },
 
-    onPeerJoined: (msg) => {
-      userCountDisplay.textContent = `${msg.user_count} USERS`;
-      showToast(`User ${msg.user_id} joined`);
-    },
+      onUsernameConfirmed: (confirmedName) => {
+        currentUserId = confirmedName;
+        localStorage.setItem('livedraw_username', currentUserId);
+        myUserIdDisplay.textContent = `YOU (${currentUserId})`;
+        if (canvas) canvas.userId = currentUserId;
+        showToast(`Display name set to ${currentUserId}`);
+      },
 
-    onPeerLeft: (msg) => {
-      userCountDisplay.textContent = `${msg.user_count} ${msg.user_count === 1 ? 'USER' : 'USERS'}`;
-      if (canvas) {
-        canvas.removeRemoteUser(msg.user_id);
-      }
-      showToast(`User ${msg.user_id} left`);
-    },
+      onPeerJoined: (msg) => {
+        userCountDisplay.textContent = `${msg.user_count} USERS`;
+        showToast(`${msg.user_id} joined`);
+      },
 
-    onBinaryMessage: (arrayBuffer) => {
-      const msg = Protocol.decode(arrayBuffer);
-      if (!msg) return;
+      onPeerLeft: (msg) => {
+        userCountDisplay.textContent = `${msg.user_count} ${msg.user_count === 1 ? 'USER' : 'USERS'}`;
+        if (canvas) {
+          canvas.removeRemoteUser(msg.user_id);
+        }
+        showToast(`${msg.user_id} left`);
+      },
 
-      switch (msg.type) {
-        case 'stroke_start':
-          canvas.handleRemoteStrokeStart(msg);
-          break;
-        case 'stroke_chunk':
-          canvas.handleRemoteStrokeChunk(msg);
-          break;
-        case 'stroke_end':
-          canvas.handleRemoteStrokeEnd(msg.strokeId);
-          break;
-        case 'stroke_undo':
-          canvas.applyUndo(msg.strokeId);
-          break;
-        case 'stroke_redo':
-          canvas.applyRedo(msg.strokeId);
-          break;
-        case 'board_clear':
-          canvas.clearBoard();
-          showToast('Board cleared');
-          break;
-        case 'cursor_move':
-          canvas.handleRemoteCursor(msg);
-          break;
-      }
-    },
+      onPeerRenamed: (msg) => {
+        if (canvas) {
+          canvas.removeRemoteUser(msg.old_user_id);
+        }
+        showToast(`${msg.old_user_id} is now ${msg.new_user_id}`);
+      },
 
-    onBoardUndo: (strokeId) => {
-      if (strokeId) canvas.applyUndo(strokeId);
-    },
+      onBinaryMessage: (arrayBuffer) => {
+        const msg = Protocol.decode(arrayBuffer);
+        if (!msg) return;
 
-    onBoardRedo: (strokeId) => {
-      if (strokeId) canvas.applyRedo(strokeId);
-    },
+        switch (msg.type) {
+          case 'stroke_start':
+            canvas.handleRemoteStrokeStart(msg);
+            break;
+          case 'stroke_chunk':
+            canvas.handleRemoteStrokeChunk(msg);
+            break;
+          case 'stroke_end':
+            canvas.handleRemoteStrokeEnd(msg.strokeId);
+            break;
+          case 'stroke_undo':
+            canvas.applyUndo(msg.strokeId);
+            break;
+          case 'stroke_redo':
+            canvas.applyRedo(msg.strokeId);
+            break;
+          case 'board_clear':
+            canvas.clearBoard();
+            showToast('Board cleared');
+            break;
+          case 'cursor_move':
+            canvas.handleRemoteCursor(msg);
+            break;
+        }
+      },
 
-    onBoardClear: () => {
-      canvas.clearBoard();
-      showToast('Board cleared');
-    },
+      onBoardUndo: (strokeId) => {
+        if (strokeId) canvas.applyUndo(strokeId);
+      },
+
+      onBoardRedo: (strokeId) => {
+        if (strokeId) canvas.applyRedo(strokeId);
+      },
+
+      onBoardClear: () => {
+        canvas.clearBoard();
+        showToast('Board cleared');
+      },
+    });
+
+    // Initialize Canvas Engine
+    canvas = new DrawingCanvas(container, {
+      userId: currentUserId,
+
+      onStrokeStart: (stroke) => {
+        const buffer = Protocol.encodeStrokeStart(
+          stroke.id,
+          stroke.userId,
+          stroke.tool,
+          stroke.color,
+          stroke.size,
+          stroke.x,
+          stroke.y
+        );
+        net.broadcastBinary(buffer, false);
+        net.sendServerMessage({
+          type: 'stroke_start',
+          stroke: {
+            id: stroke.id,
+            tool: stroke.tool,
+            color: stroke.color,
+            size: stroke.size,
+            x: stroke.x,
+            y: stroke.y,
+          },
+        });
+      },
+
+      onStrokeChunk: (chunk) => {
+        const buffer = Protocol.encodeStrokeChunk(chunk.strokeId, chunk.seq, chunk.points);
+        net.broadcastBinary(buffer, true);
+        net.sendServerMessage({
+          type: 'stroke_chunk',
+          stroke_id: chunk.strokeId,
+          seq: chunk.seq,
+          points: chunk.points,
+        });
+      },
+
+      onStrokeEnd: (strokeId) => {
+        const buffer = Protocol.encodeStrokeEnd(strokeId);
+        net.broadcastBinary(buffer, false);
+        net.sendServerMessage({
+          type: 'stroke_end',
+          stroke_id: strokeId,
+        });
+      },
+
+      onCursorMove: (normX, normY, isDrawing) => {
+        const buffer = Protocol.encodeCursorMove(currentUserId, normX, normY, isDrawing);
+        net.broadcastBinary(buffer, true);
+      },
+    });
+  }
+
+  // First-time modal or rename modal logic
+  function showNameModal(isRename = false) {
+    if (isRename) {
+      nameModalTitle.textContent = 'Change Display Name';
+      nameModalSubtitle.textContent = 'Enter your new nickname:';
+      btnSaveName.textContent = 'Update Name';
+      usernameInput.value = currentUserId;
+    } else {
+      nameModalTitle.textContent = 'Welcome to LiveDraw';
+      nameModalSubtitle.textContent = 'Choose your display name for this board:';
+      btnSaveName.textContent = 'Join Board';
+      usernameInput.value = generateRandomName();
+    }
+    nameModal.classList.remove('hidden');
+    setTimeout(() => usernameInput.focus(), 150);
+  }
+
+  function hideNameModal() {
+    nameModal.classList.add('hidden');
+  }
+
+  btnRandomName.addEventListener('click', () => {
+    usernameInput.value = generateRandomName();
   });
 
-  // Initialize Canvas Engine
-  const canvas = new DrawingCanvas(container, {
-    userId: currentUserId,
+  nameForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const entered = usernameInput.value.trim() || generateRandomName();
+    hideNameModal();
 
-    onStrokeStart: (stroke) => {
-      const buffer = Protocol.encodeStrokeStart(
-        stroke.id,
-        stroke.userId,
-        stroke.tool,
-        stroke.color,
-        stroke.size,
-        stroke.x,
-        stroke.y
-      );
-      net.broadcastBinary(buffer, false);
-      net.sendServerMessage({
-        type: 'stroke_start',
-        stroke: {
-          id: stroke.id,
-          tool: stroke.tool,
-          color: stroke.color,
-          size: stroke.size,
-          x: stroke.x,
-          y: stroke.y,
-        },
-      });
-    },
-
-    onStrokeChunk: (chunk) => {
-      const buffer = Protocol.encodeStrokeChunk(chunk.strokeId, chunk.seq, chunk.points);
-      net.broadcastBinary(buffer, true); // live fast UDP channel
-      net.sendServerMessage({
-        type: 'stroke_chunk',
-        stroke_id: chunk.strokeId,
-        seq: chunk.seq,
-        points: chunk.points,
-      });
-    },
-
-    onStrokeEnd: (strokeId) => {
-      const buffer = Protocol.encodeStrokeEnd(strokeId);
-      net.broadcastBinary(buffer, false);
-      net.sendServerMessage({
-        type: 'stroke_end',
-        stroke_id: strokeId,
-      });
-    },
-
-    onCursorMove: (normX, normY, isDrawing) => {
-      const buffer = Protocol.encodeCursorMove(currentUserId, normX, normY, isDrawing);
-      net.broadcastBinary(buffer, true);
-    },
+    if (!net) {
+      initApp(entered);
+    } else {
+      net.setUsername(entered);
+    }
   });
+
+  myUserTag.addEventListener('click', () => {
+    showNameModal(true);
+  });
+
+  // If already has saved username in browser, jump straight in; otherwise ask first time!
+  if (savedUsername && savedUsername.trim()) {
+    initApp(savedUsername.trim());
+  } else {
+    showNameModal(false);
+  }
 
   // =========================================================================
   // Tool & Action Handlers
@@ -172,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function selectTool(toolIndex) {
     activeTool = toolIndex;
-    canvas.setTool(toolIndex);
+    if (canvas) canvas.setTool(toolIndex);
 
     if (toolIndex === 0) {
       toolPen.classList.add('active');
@@ -186,7 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function setColor(hex) {
     activeColor = hex;
-    canvas.setColor(hex);
+    if (canvas) canvas.setColor(hex);
     activeColorIndicator.style.backgroundColor = hex;
     sizePreviewDot.style.backgroundColor = hex;
 
@@ -199,13 +301,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     if (activeTool === 1) {
-      selectTool(0); // Switch back to pen if user selects color
+      selectTool(0);
     }
   }
 
   function setBrushSize(size) {
     activeBrushSize = parseInt(size, 10);
-    canvas.setBrushSize(activeBrushSize);
+    if (canvas) canvas.setBrushSize(activeBrushSize);
     sizeSlider.value = activeBrushSize;
     sizeValueDisplay.textContent = `${activeBrushSize}px`;
     activeSizeLabel.textContent = `${activeBrushSize}px`;
@@ -255,21 +357,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // Undo / Redo / Clear
   btnUndo.addEventListener('click', () => {
     closeTrays();
-    net.sendServerMessage({ type: 'stroke_undo' });
+    if (net) net.sendServerMessage({ type: 'stroke_undo' });
   });
 
   btnRedo.addEventListener('click', () => {
     closeTrays();
-    net.sendServerMessage({ type: 'stroke_redo' });
+    if (net) net.sendServerMessage({ type: 'stroke_redo' });
   });
 
   btnClear.addEventListener('click', () => {
     closeTrays();
     if (confirm('Clear the shared whiteboard for everyone?')) {
       const buffer = Protocol.encodeBoardClear(currentUserId);
-      net.broadcastBinary(buffer, false);
-      net.sendServerMessage({ type: 'board_clear' });
-      canvas.clearBoard();
+      if (net) {
+        net.broadcastBinary(buffer, false);
+        net.sendServerMessage({ type: 'board_clear' });
+      }
+      if (canvas) canvas.clearBoard();
     }
   });
 
@@ -302,10 +406,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Smooth Periodic Latency Update (ms only)
+  // Smooth Periodic Latency Update
   setInterval(() => {
-    const netStats = net.getStats();
-    latencyDisplay.textContent = netStats.latencyMs > 0 ? `${netStats.latencyMs} ms` : '< 10 ms';
+    if (net) {
+      const netStats = net.getStats();
+      latencyDisplay.textContent = netStats.latencyMs > 0 ? `${netStats.latencyMs} ms` : '< 10 ms';
+    }
   }, 500);
 
   // Toast Notification System

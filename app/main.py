@@ -80,19 +80,22 @@ async def get_config():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    requested_name = websocket.query_params.get("username")
     peer = None
+    current_id = None
     try:
-        peer = await signaling_hub.connect(websocket)
+        peer = await signaling_hub.connect(websocket, requested_name=requested_name)
+        current_id = peer.user_id
         while True:
             raw_msg = await websocket.receive_text()
-            await signaling_hub.handle_message(peer.user_id, raw_msg)
+            current_id = await signaling_hub.handle_message(current_id, raw_msg)
     except WebSocketDisconnect:
-        if peer:
-            await signaling_hub.disconnect(peer.user_id)
+        if current_id:
+            await signaling_hub.disconnect(current_id)
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
-        if peer:
-            await signaling_hub.disconnect(peer.user_id)
+        if current_id:
+            await signaling_hub.disconnect(current_id)
 
 # Serve static directory
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

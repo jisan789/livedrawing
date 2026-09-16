@@ -40,10 +40,14 @@
           </svg>
           <span id="latency-display">-- ms</span>
         </div>
-        <div id="my-user-tag" class="user-tag" title="Your User ID">
+        <button id="my-user-tag" class="user-tag" title="Click to change your display name" aria-label="Change Name">
           <span class="user-color-dot" id="my-user-dot"></span>
           <span id="my-user-id">YOU</span>
-        </div>
+          <svg class="edit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -157,6 +161,26 @@
         </button>
       </div>
     </nav>
+
+    <!-- First-Time / Name Change Modal -->
+    <div id="name-modal" class="modal-backdrop hidden">
+      <div class="name-card">
+        <div class="name-card-header">
+          <div class="name-card-icon">🎨</div>
+          <h3 id="name-modal-title">Welcome to LiveDraw</h3>
+          <p id="name-modal-subtitle">Choose your display name for the live board:</p>
+        </div>
+        <form id="name-form" onsubmit="return false;">
+          <div class="input-group">
+            <input type="text" id="username-input" maxlength="20" placeholder="e.g. Alex, Creative_Fox" autocomplete="off" autocorrect="off" autocapitalize="none">
+          </div>
+          <div class="modal-actions">
+            <button type="button" id="btn-random-name" class="secondary-btn" title="Generate random name">🎲 Random</button>
+            <button type="submit" id="btn-save-name" class="primary-btn">Join Board</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <!-- Toast Notification Overlay -->
     <div id="toast-container"></div>

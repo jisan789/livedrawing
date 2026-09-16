@@ -12,6 +12,7 @@
   --text-muted: #64748b;
   
   --accent-primary: #6366f1;
+  --accent-hover: #4f46e5;
   --accent-glow: rgba(99, 102, 241, 0.4);
   
   --color-green: #10b981;
@@ -79,7 +80,7 @@ html, body {
   align-items: center;
   justify-content: space-between;
   z-index: 100;
-  pointer-events: none; /* Let user draw freely near edges */
+  pointer-events: none;
 }
 
 .header-left, .header-right {
@@ -155,6 +156,15 @@ html, body {
   color: var(--text-primary);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.user-tag:hover, .user-tag:active {
+  border-color: var(--border-glass-active);
+  background: var(--bg-glass-card);
+  transform: scale(1.02);
 }
 
 .user-color-dot {
@@ -162,6 +172,14 @@ html, body {
   height: 7px;
   border-radius: 50%;
   background-color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.edit-icon {
+  width: 10px;
+  height: 10px;
+  opacity: 0.6;
+  margin-left: 1px;
 }
 
 /* ==========================================================================
@@ -445,6 +463,133 @@ html, body {
   min-width: 34px;
   text-align: right;
   color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   Name Prompt Modal (First-time & Rename)
+   ========================================================================== */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 16px;
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.modal-backdrop.hidden {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.name-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--bg-glass-card);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  padding: 24px 20px;
+  box-shadow: var(--shadow-float);
+  text-align: center;
+  transform: translateY(0) scale(1);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-backdrop.hidden .name-card {
+  transform: translateY(20px) scale(0.95);
+}
+
+.name-card-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.name-card-header h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.name-card-header p {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 18px;
+}
+
+.input-group {
+  margin-bottom: 16px;
+}
+
+#username-input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-glass);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text-primary);
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+#username-input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-glow);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.primary-btn {
+  flex: 2;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-hover) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-glow);
+  transition: transform 0.12s ease;
+}
+
+.secondary-btn {
+  flex: 1;
+  padding: 12px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-glass);
+  color: var(--text-secondary);
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.15s ease;
+}
+
+.primary-btn:active, .secondary-btn:active {
+  transform: scale(0.96);
+}
+
+.secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
 }
 
 /* ==========================================================================

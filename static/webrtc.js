@@ -7,6 +7,7 @@ class WebRTCManager {
   constructor(options = {}) {
     this.userId = null;
     this.userColor = null;
+    this.requestedUsername = options.requestedUsername || null;
     this.iceServers = [];
     this.peers = new Map(); // peerId -> { pc, liveChannel, reliableChannel, isConnected }
     this.ws = null;
@@ -21,8 +22,10 @@ class WebRTCManager {
 
     // Callbacks
     this.onWelcome = options.onWelcome || (() => {});
+    this.onUsernameConfirmed = options.onUsernameConfirmed || (() => {});
     this.onPeerJoined = options.onPeerJoined || (() => {});
     this.onPeerLeft = options.onPeerLeft || (() => {});
+    this.onPeerRenamed = options.onPeerRenamed || (() => {});
     this.onBinaryMessage = options.onBinaryMessage || (() => {});
     this.onBoardUndo = options.onBoardUndo || (() => {});
     this.onBoardRedo = options.onBoardRedo || (() => {});
@@ -50,7 +53,10 @@ class WebRTCManager {
 
   connectSignaling() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    let wsUrl = `${protocol}//${window.location.host}/ws`;
+    if (this.requestedUsername) {
+      wsUrl += `?username=${encodeURIComponent(this.requestedUsername)}`;
+    }
 
     this.ws = new WebSocket(wsUrl);
     this.ws.binaryType = 'arraybuffer';
@@ -87,6 +93,15 @@ class WebRTCManager {
     };
   }
 
+  setUsername(newName) {
+    if (!newName || !newName.trim()) return;
+    this.requestedUsername = newName.trim();
+    this.sendServerMessage({
+      type: 'set_username',
+      username: this.requestedUsername,
+    });
+  }
+
   handleSignalingMessage(msg) {
     switch (msg.type) {
       case 'welcome':
@@ -102,14 +117,28 @@ class WebRTCManager {
         }
         break;
 
+      case 'username_confirmed':
+        this.userId = msg.user_id;
+        this.onUsernameConfirmed(msg.user_id);
+        break;
+
       case 'peer_joined':
         this.onPeerJoined(msg);
-        // Note: The new peer will initiate the offer to us, or we create connection on demand
         break;
 
       case 'peer_left':
         this.closePeerConnection(msg.user_id);
         this.onPeerLeft(msg);
+        break;
+
+      case 'peer_renamed':
+        // Update peer tracking with new user ID
+        if (this.peers.has(msg.old_user_id)) {
+          const peerData = this.peers.get(msg.old_user_id);
+          this.peers.delete(msg.old_user_id);
+          this.peers.set(msg.new_user_id, peerData);
+        }
+        this.onPeerRenamed(msg);
         break;
 
       case 'signal':
@@ -171,20 +200,17 @@ class WebRTCManager {
     };
 
     if (isInitiator) {
-      // 1. Fast UDP Unreliable channel for high-frequency live points
       const liveDc = pc.createDataChannel('livedraw_live', {
         ordered: false,
         maxRetransmits: 0,
       });
       this.setupDataChannel(targetPeerId, liveDc, true);
 
-      // 2. Reliable channel for strokes / undo / redo
       const reliableDc = pc.createDataChannel('livedraw_reliable', {
         ordered: true,
       });
       this.setupDataChannel(targetPeerId, reliableDc, false);
 
-      // Create Offer
       pc.createOffer().then((offer) => {
         return pc.setLocalDescription(offer);
       }).then(() => {
@@ -195,7 +221,6 @@ class WebRTCManager {
         console.error(`Error creating offer to ${targetPeerId}:`, err);
       });
     } else {
-      // Receiver: Listen for data channels
       pc.ondatachannel = (event) => {
         const dc = event.channel;
         const isLive = dc.label === 'livedraw_live';
@@ -283,9 +308,6 @@ class WebRTCManager {
   // Data Transmission (Binary DataChannels with Server Sync)
   // =========================================================================
 
-  /**
-   * Broadcast binary buffer over WebRTC DataChannels + sync to server
-   */
   broadcastBinary(arrayBuffer, isLiveHighFrequency = false) {
     this.trackSent(arrayBuffer.byteLength);
     let dcSentCount = 0;
@@ -305,9 +327,6 @@ class WebRTCManager {
     return dcSentCount;
   }
 
-  /**
-   * Sync JSON mutation to Server for state persistence & new joiners
-   */
   sendServerMessage(msgObj) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       const str = JSON.stringify(msgObj);
