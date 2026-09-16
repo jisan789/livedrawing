@@ -38,6 +38,8 @@ class DrawingCanvas {
 
     // Remote active strokes map: strokeId -> { userId, tool, color, size, points, lastPoint }
     this.remoteActiveStrokes = new Map();
+    // Remote live text editing map: strokeId -> { id, userId, text, color, size, point, lastSeen }
+    this.remoteLiveTexts = new Map();
     // Remote cursors map: userId -> { x, y, isDrawing, color, lastSeen }
     this.remoteCursors = new Map();
 
@@ -407,6 +409,25 @@ class DrawingCanvas {
     for (const stroke of this.remoteActiveStrokes.values()) {
       this.renderStroke(this.activeCtx, stroke);
     }
+
+    // Re-render remote live typing text in real time
+    for (const item of this.remoteLiveTexts.values()) {
+      if (item.text && item.point) {
+        const [sx, sy] = this.toScreen(item.point[0], item.point[1]);
+        const fontSize = Math.max(14, Math.round((item.size || 2) * 6));
+        this.activeCtx.save();
+        this.activeCtx.font = `600 ${fontSize}px 'Outfit', -apple-system, sans-serif`;
+        this.activeCtx.fillStyle = item.color || '#1e1e1e';
+        this.activeCtx.textBaseline = 'top';
+        this.activeCtx.fillText(item.text, sx, sy);
+
+        // Blinking live cursor indicator next to remote text
+        const textWidth = this.activeCtx.measureText(item.text).width;
+        this.activeCtx.fillStyle = item.color || '#3b82f6';
+        this.activeCtx.fillRect(sx + textWidth + 2, sy, 2, fontSize);
+        this.activeCtx.restore();
+      }
+    }
   }
 
   redrawAll() {
@@ -430,7 +451,26 @@ class DrawingCanvas {
   // Board State Sync & Mutations (Undo, Redo, Clear, Initial Snapshot)
   // =========================================================================
 
+  handleRemoteLiveText(data) {
+    if (!data.text || !data.text.trim()) {
+      this.remoteLiveTexts.delete(data.strokeId);
+    } else {
+      this.remoteLiveTexts.set(data.strokeId, {
+        strokeId: data.strokeId,
+        userId: data.userId,
+        text: data.text,
+        color: data.color,
+        size: data.size,
+        point: data.point,
+        lastSeen: Date.now(),
+      });
+    }
+    this.clearActiveCanvas();
+    this.renderAllActiveStrokes();
+  }
+
   handleRemoteStrokeText(data) {
+    this.remoteLiveTexts.delete(data.strokeId);
     const stroke = {
       id: data.strokeId,
       userId: data.userId,
@@ -444,6 +484,8 @@ class DrawingCanvas {
     this.committedStrokes.set(stroke.id, stroke);
     this.strokeOrder.push(stroke.id);
     this.renderStrokeToBase(stroke);
+    this.clearActiveCanvas();
+    this.renderAllActiveStrokes();
   }
 
   loadSnapshot(strokesList) {

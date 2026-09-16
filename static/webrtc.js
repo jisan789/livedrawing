@@ -26,6 +26,7 @@ class WebRTCManager {
     this.onPeerJoined = options.onPeerJoined || (() => {});
     this.onPeerLeft = options.onPeerLeft || (() => {});
     this.onPeerRenamed = options.onPeerRenamed || (() => {});
+    this.onStrokeTextLive = options.onStrokeTextLive || (() => {});
     this.onBinaryMessage = options.onBinaryMessage || (() => {});
     this.onBoardUndo = options.onBoardUndo || (() => {});
     this.onBoardRedo = options.onBoardRedo || (() => {});
@@ -139,6 +140,19 @@ class WebRTCManager {
           this.peers.set(msg.new_user_id, peerData);
         }
         this.onPeerRenamed(msg);
+        break;
+
+      case 'stroke_text_live':
+        if (msg.stroke) {
+          this.onStrokeTextLive({
+            strokeId: msg.stroke.id,
+            userId: msg.user_id,
+            text: msg.stroke.text,
+            color: msg.stroke.color,
+            size: msg.stroke.size,
+            point: [msg.stroke.x, msg.stroke.y],
+          });
+        }
         break;
 
       case 'signal':

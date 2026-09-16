@@ -209,67 +209,34 @@ html, body {
   touch-action: none;
 }
 
-/* Floating Inline Text Editor */
-.inline-text-box {
+/* Direct On-Canvas Text Editor */
+.direct-text-editor {
   position: absolute;
   z-index: 120;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--bg-glass-card);
-  border: 1px solid var(--border-glass-active);
-  box-shadow: var(--shadow-float);
-  border-radius: var(--radius-md);
-  padding: 4px 6px;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  pointer-events: auto;
-  transition: opacity 0.15s ease, transform 0.15s ease;
-  max-width: 90vw;
-}
-
-.inline-text-box.hidden {
-  opacity: 0;
-  pointer-events: none;
-  transform: scale(0.95);
-  visibility: hidden;
-}
-
-#inline-text-input {
   background: transparent;
   border: none;
+  border-bottom: 2px dashed var(--accent-primary);
   outline: none;
-  color: var(--text-primary);
-  font-family: 'Outfit', sans-serif;
-  font-size: 15px;
+  margin: 0;
+  padding: 0 4px;
+  line-height: 1.15;
+  font-family: 'Outfit', -apple-system, sans-serif;
   font-weight: 600;
-  min-width: 140px;
-  max-width: 260px;
-  padding: 4px 6px;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+  caret-color: var(--accent-primary);
+  min-width: 80px;
+  max-width: calc(100vw - 32px);
+  pointer-events: auto;
   user-select: text;
   -webkit-user-select: text;
+  box-shadow: none;
 }
 
-.text-commit-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: none;
-  background: var(--accent-primary);
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: var(--shadow-glow);
-  transition: transform 0.12s ease;
-  flex-shrink: 0;
-}
-
-.text-commit-btn:active {
-  transform: scale(0.9);
+.direct-text-editor.hidden {
+  display: none !important;
 }
 
 /* ==========================================================================

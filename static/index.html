@@ -57,11 +57,8 @@
       <canvas id="active-canvas" class="drawing-layer"></canvas>
       <canvas id="cursor-canvas" class="drawing-layer"></canvas>
 
-      <!-- Floating Inline Text Editor -->
-      <div id="inline-text-overlay" class="inline-text-box hidden">
-        <input type="text" id="inline-text-input" placeholder="Type text..." autocomplete="off" autocorrect="off">
-        <button type="button" id="btn-commit-text" class="text-commit-btn" title="Add text">✓</button>
-      </div>
+      <!-- Direct On-Canvas Text Editor -->
+      <textarea id="direct-text-editor" class="direct-text-editor hidden" rows="1" spellcheck="false" autocomplete="off" autocorrect="off" placeholder="Type text..."></textarea>
     </main>
 
     <!-- Floating Color Picker Tray -->

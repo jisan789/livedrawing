@@ -1,6 +1,6 @@
 /**
  * LiveDraw Main Application Coordinator
- * Connects Canvas, WebRTC DataChannels, Protocol, Text Tool, and Mobile UI.
+ * Connects Canvas, WebRTC DataChannels, Protocol, Direct On-Canvas Text Tool, and Mobile UI.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -21,10 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const nameModalTitle = document.getElementById('name-modal-title');
   const nameModalSubtitle = document.getElementById('name-modal-subtitle');
 
-  // Inline Text Box
-  const inlineTextOverlay = document.getElementById('inline-text-overlay');
-  const inlineTextInput = document.getElementById('inline-text-input');
-  const btnCommitText = document.getElementById('btn-commit-text');
+  // Direct On-Canvas Text Editor Element
+  const directTextEditor = document.getElementById('direct-text-editor');
 
   // Tool Buttons
   const toolPen = document.getElementById('tool-pen');
@@ -55,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let net = null;
   let canvas = null;
   let pendingTextPos = null;
+  let currentTextStrokeId = 0;
 
   // Nickname Generators
   const ADJECTIVES = ['Creative', 'Swift', 'Bright', 'Cosmic', 'Neon', 'Velvet', 'Lunar', 'Solar', 'Epic', 'Wild'];
@@ -126,6 +125,12 @@ document.addEventListener('DOMContentLoaded', () => {
           canvas.removeRemoteUser(msg.old_user_id);
         }
         showToast(`${msg.old_user_id} is now ${msg.new_user_id}`);
+      },
+
+      onStrokeTextLive: (data) => {
+        if (canvas) {
+          canvas.handleRemoteLiveText(data);
+        }
       },
 
       onBinaryMessage: (arrayBuffer) => {
@@ -229,48 +234,78 @@ document.addEventListener('DOMContentLoaded', () => {
       },
 
       onTextRequest: (pos) => {
-        openInlineText(pos);
+        openDirectText(pos);
       },
     });
   }
 
   // =========================================================================
-  // Inline Text Tool Interaction
+  // Direct On-Canvas Text Tool & Live Keystroke Streaming
   // =========================================================================
 
-  function openInlineText(pos) {
+  function openDirectText(pos) {
     if (pendingTextPos) {
-      commitInlineText();
+      commitDirectText();
     }
     pendingTextPos = pos;
+    currentTextStrokeId = (Date.now() & 0x7fffffff) ^ Math.floor(Math.random() * 100000);
 
     const rect = container.getBoundingClientRect();
     let left = pos.clientX - rect.left;
     let top = pos.clientY - rect.top;
 
-    // Boundary protection for mobile edges
-    const maxLeft = rect.width - 200;
-    const maxTop = rect.height - 80;
-    left = Math.max(10, Math.min(maxLeft, left));
-    top = Math.max(10, Math.min(maxTop, top));
+    const fontSize = Math.max(14, Math.round(activeBrushSize * 6));
+    directTextEditor.style.fontSize = `${fontSize}px`;
+    directTextEditor.style.color = activeColor;
+    directTextEditor.style.left = `${left}px`;
+    directTextEditor.style.top = `${top}px`;
+    directTextEditor.value = '';
+    directTextEditor.style.height = 'auto';
+    directTextEditor.classList.remove('hidden');
 
-    inlineTextOverlay.style.left = `${left}px`;
-    inlineTextOverlay.style.top = `${top}px`;
-    inlineTextInput.value = '';
-    inlineTextInput.style.color = activeColor;
-    inlineTextOverlay.classList.remove('hidden');
-
-    setTimeout(() => inlineTextInput.focus(), 50);
+    setTimeout(() => directTextEditor.focus(), 30);
   }
 
-  function commitInlineText() {
+  // Broadcast text live as the user types
+  directTextEditor.addEventListener('input', () => {
+    directTextEditor.style.height = 'auto';
+    directTextEditor.style.height = directTextEditor.scrollHeight + 'px';
+
+    if (pendingTextPos) {
+      const textVal = directTextEditor.value;
+      const buffer = Protocol.encodeStrokeText(
+        currentTextStrokeId,
+        currentUserId,
+        textVal,
+        activeColor,
+        activeBrushSize,
+        pendingTextPos.x,
+        pendingTextPos.y
+      );
+      if (net) {
+        net.broadcastBinary(buffer, true);
+        net.sendServerMessage({
+          type: 'stroke_text_live',
+          stroke: {
+            id: currentTextStrokeId,
+            text: textVal,
+            color: activeColor,
+            size: activeBrushSize,
+            x: pendingTextPos.x,
+            y: pendingTextPos.y,
+          },
+        });
+      }
+    }
+  });
+
+  function commitDirectText() {
     if (!pendingTextPos) return;
 
-    const text = inlineTextInput.value.trim();
+    const text = directTextEditor.value.trim();
     if (text) {
-      const strokeId = (Date.now() & 0x7fffffff) ^ Math.floor(Math.random() * 100000);
       const textStroke = {
-        id: strokeId,
+        id: currentTextStrokeId,
         userId: currentUserId,
         tool: 2,
         text,
@@ -280,9 +315,9 @@ document.addEventListener('DOMContentLoaded', () => {
         undone: false,
       };
 
-      // Broadcast binary
+      // Broadcast final committed binary text
       const buffer = Protocol.encodeStrokeText(
-        strokeId,
+        currentTextStrokeId,
         currentUserId,
         text,
         activeColor,
@@ -295,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
         net.sendServerMessage({
           type: 'stroke_text',
           stroke: {
-            id: strokeId,
+            id: currentTextStrokeId,
             text,
             color: activeColor,
             size: activeBrushSize,
@@ -305,30 +340,57 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
 
-      // Add to local canvas
+      // Commit to local canvas
       if (canvas) {
-        canvas.committedStrokes.set(strokeId, textStroke);
-        canvas.strokeOrder.push(strokeId);
+        canvas.committedStrokes.set(currentTextStrokeId, textStroke);
+        canvas.strokeOrder.push(currentTextStrokeId);
         canvas.renderStrokeToBase(textStroke);
+        canvas.clearActiveCanvas();
+        canvas.renderAllActiveStrokes();
+      }
+    } else {
+      // Broadcast empty text to clear remote live typing
+      if (net) {
+        const buffer = Protocol.encodeStrokeText(
+          currentTextStrokeId,
+          currentUserId,
+          '',
+          activeColor,
+          activeBrushSize,
+          pendingTextPos.x,
+          pendingTextPos.y
+        );
+        net.broadcastBinary(buffer, true);
+        net.sendServerMessage({
+          type: 'stroke_text_live',
+          stroke: {
+            id: currentTextStrokeId,
+            text: '',
+            color: activeColor,
+            size: activeBrushSize,
+            x: pendingTextPos.x,
+            y: pendingTextPos.y,
+          },
+        });
       }
     }
 
-    inlineTextOverlay.classList.add('hidden');
-    inlineTextInput.value = '';
+    directTextEditor.classList.add('hidden');
+    directTextEditor.value = '';
     pendingTextPos = null;
   }
 
-  btnCommitText.addEventListener('click', (e) => {
-    e.stopPropagation();
-    commitInlineText();
+  directTextEditor.addEventListener('blur', () => {
+    commitDirectText();
   });
 
-  inlineTextInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
+  directTextEditor.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      commitInlineText();
+      commitDirectText();
     } else if (e.key === 'Escape') {
-      inlineTextOverlay.classList.add('hidden');
+      directTextEditor.classList.add('hidden');
+      directTextEditor.value = '';
       pendingTextPos = null;
     }
   });
@@ -396,7 +458,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (toolText) toolText.classList.toggle('active', toolIndex === 2);
 
     if (toolIndex !== 2 && pendingTextPos) {
-      commitInlineText();
+      commitDirectText();
     }
     closeTrays();
   }
@@ -406,7 +468,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (canvas) canvas.setColor(hex);
     activeColorIndicator.style.backgroundColor = hex;
     sizePreviewDot.style.backgroundColor = hex;
-    inlineTextInput.style.color = hex;
+    directTextEditor.style.color = hex;
 
     colorSwatches.forEach(s => {
       if (s.dataset.color.toLowerCase() === hex.toLowerCase()) {
@@ -429,6 +491,9 @@ document.addEventListener('DOMContentLoaded', () => {
     activeSizeLabel.textContent = `${activeBrushSize}px`;
     sizePreviewDot.style.width = `${Math.min(28, Math.max(2, activeBrushSize))}px`;
     sizePreviewDot.style.height = `${Math.min(28, Math.max(2, activeBrushSize))}px`;
+
+    const fontSize = Math.max(14, Math.round(activeBrushSize * 6));
+    directTextEditor.style.fontSize = `${fontSize}px`;
   }
 
   function closeTrays() {
@@ -474,19 +539,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // Undo / Redo / Clear
   btnUndo.addEventListener('click', () => {
     closeTrays();
-    if (pendingTextPos) commitInlineText();
+    if (pendingTextPos) commitDirectText();
     if (net) net.sendServerMessage({ type: 'stroke_undo' });
   });
 
   btnRedo.addEventListener('click', () => {
     closeTrays();
-    if (pendingTextPos) commitInlineText();
+    if (pendingTextPos) commitDirectText();
     if (net) net.sendServerMessage({ type: 'stroke_redo' });
   });
 
   btnClear.addEventListener('click', () => {
     closeTrays();
-    if (pendingTextPos) commitInlineText();
+    if (pendingTextPos) commitDirectText();
     if (confirm('Clear the shared whiteboard for everyone?')) {
       const buffer = Protocol.encodeBoardClear(currentUserId);
       if (net) {
@@ -499,7 +564,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Keyboard Shortcuts
   window.addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'INPUT') return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       e.preventDefault();
