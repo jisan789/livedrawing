@@ -209,36 +209,6 @@ html, body {
   touch-action: none;
 }
 
-/* Direct On-Canvas Text Editor */
-.direct-text-editor {
-  position: absolute;
-  z-index: 120;
-  background: transparent;
-  border: none;
-  border-bottom: 2px dashed var(--accent-primary);
-  outline: none;
-  margin: 0;
-  padding: 0 4px;
-  line-height: 1.15;
-  font-family: 'Outfit', -apple-system, sans-serif;
-  font-weight: 600;
-  resize: none;
-  overflow: hidden;
-  white-space: pre-wrap;
-  word-break: break-word;
-  caret-color: var(--accent-primary);
-  min-width: 80px;
-  max-width: calc(100vw - 32px);
-  pointer-events: auto;
-  user-select: text;
-  -webkit-user-select: text;
-  box-shadow: none;
-}
-
-.direct-text-editor.hidden {
-  display: none !important;
-}
-
 /* ==========================================================================
    Bottom Floating Toolbar (Mobile-First Touch Optimized)
    ========================================================================== */

@@ -56,9 +56,6 @@
       <canvas id="base-canvas" class="drawing-layer"></canvas>
       <canvas id="active-canvas" class="drawing-layer"></canvas>
       <canvas id="cursor-canvas" class="drawing-layer"></canvas>
-
-      <!-- Direct On-Canvas Text Editor -->
-      <textarea id="direct-text-editor" class="direct-text-editor hidden" rows="1" spellcheck="false" autocomplete="off" autocorrect="off" placeholder="Type text..."></textarea>
     </main>
 
     <!-- Floating Color Picker Tray -->
@@ -114,16 +111,6 @@
             <path d="m5 11 9 9"></path>
           </svg>
           <span class="tool-label">Eraser</span>
-        </button>
-
-        <!-- Text Tool -->
-        <button id="tool-text" class="tool-btn" title="Text" aria-label="Text Tool">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="4 7 4 4 20 4 20 7"></polyline>
-            <line x1="9" y1="20" x2="15" y2="20"></line>
-            <line x1="12" y1="4" x2="12" y2="20"></line>
-          </svg>
-          <span class="tool-label">Text</span>
         </button>
 
         <div class="tool-divider"></div>

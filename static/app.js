@@ -21,13 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const nameModalTitle = document.getElementById('name-modal-title');
   const nameModalSubtitle = document.getElementById('name-modal-subtitle');
 
-  // Direct On-Canvas Text Editor Element
-  const directTextEditor = document.getElementById('direct-text-editor');
-
   // Tool Buttons
   const toolPen = document.getElementById('tool-pen');
   const toolEraser = document.getElementById('tool-eraser');
-  const toolText = document.getElementById('tool-text');
   const btnColorTrigger = document.getElementById('btn-color-trigger');
   const btnSizeTrigger = document.getElementById('btn-size-trigger');
   const btnUndo = document.getElementById('btn-undo');
@@ -47,13 +43,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let currentUserId = 'ME';
   let currentUserColor = '#3b82f6';
-  let activeTool = 0; // 0 = Pen, 1 = Eraser, 2 = Text
+  let activeTool = 0; // 0 = Pen, 1 = Eraser
   let activeColor = '#1e1e1e';
   let activeBrushSize = 2;
   let net = null;
   let canvas = null;
-  let pendingTextPos = null;
-  let currentTextStrokeId = 0;
 
   // Nickname Generators
   const ADJECTIVES = ['Creative', 'Swift', 'Bright', 'Cosmic', 'Neon', 'Velvet', 'Lunar', 'Solar', 'Epic', 'Wild'];
@@ -127,12 +121,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(`${msg.old_user_id} is now ${msg.new_user_id}`);
       },
 
-      onStrokeTextLive: (data) => {
-        if (canvas) {
-          canvas.handleRemoteLiveText(data);
-        }
-      },
-
       onBinaryMessage: (arrayBuffer) => {
         const msg = Protocol.decode(arrayBuffer);
         if (!msg) return;
@@ -146,13 +134,6 @@ document.addEventListener('DOMContentLoaded', () => {
             break;
           case 'stroke_end':
             canvas.handleRemoteStrokeEnd(msg.strokeId);
-            break;
-          case 'stroke_text':
-            if (msg.isCommit) {
-              canvas.handleRemoteStrokeText(msg);
-            } else {
-              canvas.handleRemoteLiveText(msg);
-            }
             break;
           case 'stroke_undo':
             canvas.applyUndo(msg.strokeId);
@@ -236,195 +217,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const buffer = Protocol.encodeCursorMove(currentUserId, normX, normY, isDrawing);
         net.broadcastBinary(buffer, true);
       },
-
-      onTextRequest: (pos) => {
-        openDirectText(pos);
-      },
     });
   }
-
-  // =========================================================================
-  // Direct On-Canvas Text Tool & Live Keystroke Streaming
-  // =========================================================================
-
-  function openDirectText(pos) {
-    if (pendingTextPos) {
-      commitDirectText();
-    }
-    pendingTextPos = pos;
-    currentTextStrokeId = (Date.now() & 0x7fffffff) ^ Math.floor(Math.random() * 100000);
-
-    const rect = container.getBoundingClientRect();
-    let left = pos.clientX - rect.left;
-    let top = pos.clientY - rect.top;
-
-    const fontSize = Math.max(14, Math.round(activeBrushSize * 6));
-    directTextEditor.style.fontSize = `${fontSize}px`;
-    directTextEditor.style.color = activeColor;
-    directTextEditor.style.left = `${left}px`;
-    directTextEditor.style.top = `${top}px`;
-    directTextEditor.value = '';
-    directTextEditor.style.height = 'auto';
-    directTextEditor.classList.remove('hidden');
-
-    setTimeout(() => directTextEditor.focus(), 30);
-  }
-
-  // Broadcast text live as the user types
-  directTextEditor.addEventListener('input', () => {
-    directTextEditor.style.height = 'auto';
-    directTextEditor.style.height = directTextEditor.scrollHeight + 'px';
-
-    if (pendingTextPos) {
-      const textVal = directTextEditor.value;
-      const buffer = Protocol.encodeStrokeText(
-        currentTextStrokeId,
-        currentUserId,
-        textVal,
-        activeColor,
-        activeBrushSize,
-        pendingTextPos.x,
-        pendingTextPos.y,
-        false
-      );
-      if (net) {
-        net.broadcastBinary(buffer, true);
-        net.sendServerMessage({
-          type: 'stroke_text_live',
-          stroke: {
-            id: currentTextStrokeId,
-            text: textVal,
-            color: activeColor,
-            size: activeBrushSize,
-            x: pendingTextPos.x,
-            y: pendingTextPos.y,
-          },
-        });
-      }
-    }
-  });
-
-  function commitDirectText() {
-    if (!pendingTextPos) return;
-
-    const text = directTextEditor.value.trim();
-    if (text) {
-      const textStroke = {
-        id: currentTextStrokeId,
-        userId: currentUserId,
-        tool: 2,
-        text,
-        color: activeColor,
-        size: activeBrushSize,
-        points: [[pendingTextPos.x, pendingTextPos.y]],
-        undone: false,
-      };
-
-      // Broadcast final committed binary text
-      const buffer = Protocol.encodeStrokeText(
-        currentTextStrokeId,
-        currentUserId,
-        text,
-        activeColor,
-        activeBrushSize,
-        pendingTextPos.x,
-        pendingTextPos.y,
-        true
-      );
-      if (net) {
-        net.broadcastBinary(buffer, false);
-        net.sendServerMessage({
-          type: 'stroke_text',
-          stroke: {
-            id: currentTextStrokeId,
-            text,
-            color: activeColor,
-            size: activeBrushSize,
-            x: pendingTextPos.x,
-            y: pendingTextPos.y,
-          },
-        });
-      }
-
-      // Commit to local canvas
-      if (canvas) {
-        canvas.committedStrokes.set(currentTextStrokeId, textStroke);
-        canvas.strokeOrder.push(currentTextStrokeId);
-        canvas.renderStrokeToBase(textStroke);
-        canvas.clearActiveCanvas();
-        canvas.renderAllActiveStrokes();
-      }
-    } else {
-      // Broadcast empty text to clear remote live typing
-      if (net) {
-        const buffer = Protocol.encodeStrokeText(
-          currentTextStrokeId,
-          currentUserId,
-          '',
-          activeColor,
-          activeBrushSize,
-          pendingTextPos.x,
-          pendingTextPos.y,
-          false
-        );
-        net.broadcastBinary(buffer, true);
-        net.sendServerMessage({
-          type: 'stroke_text_live',
-          stroke: {
-            id: currentTextStrokeId,
-            text: '',
-            color: activeColor,
-            size: activeBrushSize,
-            x: pendingTextPos.x,
-            y: pendingTextPos.y,
-          },
-        });
-      }
-    }
-
-    directTextEditor.classList.add('hidden');
-    directTextEditor.value = '';
-    pendingTextPos = null;
-  }
-
-  directTextEditor.addEventListener('blur', () => {
-    commitDirectText();
-  });
-
-  directTextEditor.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      commitDirectText();
-    } else if (e.key === 'Escape') {
-      if (net && pendingTextPos) {
-        const buffer = Protocol.encodeStrokeText(
-          currentTextStrokeId,
-          currentUserId,
-          '',
-          activeColor,
-          activeBrushSize,
-          pendingTextPos.x,
-          pendingTextPos.y,
-          false
-        );
-        net.broadcastBinary(buffer, true);
-        net.sendServerMessage({
-          type: 'stroke_text_live',
-          stroke: {
-            id: currentTextStrokeId,
-            text: '',
-            color: activeColor,
-            size: activeBrushSize,
-            x: pendingTextPos.x,
-            y: pendingTextPos.y,
-          },
-        });
-      }
-      directTextEditor.classList.add('hidden');
-      directTextEditor.value = '';
-      pendingTextPos = null;
-    }
-  });
 
   // =========================================================================
   // First-time / Rename Modal
@@ -486,11 +280,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     toolPen.classList.toggle('active', toolIndex === 0);
     toolEraser.classList.toggle('active', toolIndex === 1);
-    if (toolText) toolText.classList.toggle('active', toolIndex === 2);
-
-    if (toolIndex !== 2 && pendingTextPos) {
-      commitDirectText();
-    }
     closeTrays();
   }
 
@@ -499,7 +288,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (canvas) canvas.setColor(hex);
     activeColorIndicator.style.backgroundColor = hex;
     sizePreviewDot.style.backgroundColor = hex;
-    directTextEditor.style.color = hex;
 
     colorSwatches.forEach(s => {
       if (s.dataset.color.toLowerCase() === hex.toLowerCase()) {
@@ -522,9 +310,6 @@ document.addEventListener('DOMContentLoaded', () => {
     activeSizeLabel.textContent = `${activeBrushSize}px`;
     sizePreviewDot.style.width = `${Math.min(28, Math.max(2, activeBrushSize))}px`;
     sizePreviewDot.style.height = `${Math.min(28, Math.max(2, activeBrushSize))}px`;
-
-    const fontSize = Math.max(14, Math.round(activeBrushSize * 6));
-    directTextEditor.style.fontSize = `${fontSize}px`;
   }
 
   function closeTrays() {
@@ -535,7 +320,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Event Listeners for UI
   toolPen.addEventListener('click', () => selectTool(0));
   toolEraser.addEventListener('click', () => selectTool(1));
-  if (toolText) toolText.addEventListener('click', () => selectTool(2));
 
   btnColorTrigger.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -570,19 +354,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Undo / Redo / Clear
   btnUndo.addEventListener('click', () => {
     closeTrays();
-    if (pendingTextPos) commitDirectText();
     if (net) net.sendServerMessage({ type: 'stroke_undo' });
   });
 
   btnRedo.addEventListener('click', () => {
     closeTrays();
-    if (pendingTextPos) commitDirectText();
     if (net) net.sendServerMessage({ type: 'stroke_redo' });
   });
 
   btnClear.addEventListener('click', () => {
     closeTrays();
-    if (pendingTextPos) commitDirectText();
     if (confirm('Clear the shared whiteboard for everyone?')) {
       const buffer = Protocol.encodeBoardClear(currentUserId);
       if (net) {
@@ -611,8 +392,6 @@ document.addEventListener('DOMContentLoaded', () => {
       selectTool(0);
     } else if (e.key.toLowerCase() === 'e') {
       selectTool(1);
-    } else if (e.key.toLowerCase() === 't') {
-      selectTool(2);
     }
   });
 

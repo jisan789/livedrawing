@@ -16,7 +16,6 @@ class Stroke:
         color: str,
         size: float,
         points: Optional[List[List[int]]] = None,
-        text: Optional[str] = None,
     ):
         self.stroke_id = stroke_id
         self.user_id = user_id
@@ -24,7 +23,6 @@ class Stroke:
         self.color = color
         self.size = size
         self.points: List[List[int]] = points or []
-        self.text = text
         self.created_at = time.time()
         self.is_finished = False
         self.is_undone = False
@@ -33,7 +31,7 @@ class Stroke:
         self.points.append([x, y])
 
     def to_dict(self) -> Dict[str, Any]:
-        data = {
+        return {
             "id": self.stroke_id,
             "user_id": self.user_id,
             "tool": self.tool,
@@ -42,9 +40,6 @@ class Stroke:
             "points": self.points,
             "undone": self.is_undone,
         }
-        if self.text is not None:
-            data["text"] = self.text
-        return data
 
 
 class BoardState:
@@ -66,22 +61,6 @@ class BoardState:
             if user_id not in self.user_redo_stack:
                 self.user_redo_stack[user_id] = []
             
-            self.user_undo_stack[user_id].append(stroke_id)
-            self.user_redo_stack[user_id].clear()
-            return stroke
-
-    def add_text_stroke(self, stroke_id: int, user_id: str, text: str, color: str, size: float, x: int, y: int) -> Stroke:
-        with self._lock:
-            stroke = Stroke(stroke_id, user_id, 2, color, size, [[x, y]], text=text)
-            stroke.is_finished = True
-            self.strokes[stroke_id] = stroke
-            self.stroke_order.append(stroke_id)
-
-            if user_id not in self.user_undo_stack:
-                self.user_undo_stack[user_id] = []
-            if user_id not in self.user_redo_stack:
-                self.user_redo_stack[user_id] = []
-
             self.user_undo_stack[user_id].append(stroke_id)
             self.user_redo_stack[user_id].clear()
             return stroke

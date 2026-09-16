@@ -207,32 +207,6 @@ class SignalingHub:
                 if sid:
                     board_state.end_stroke(sid)
 
-            elif mtype == "stroke_text":
-                s = msg.get("stroke")
-                if s:
-                    board_state.add_text_stroke(
-                        stroke_id=s["id"],
-                        user_id=current_sender_id,
-                        text=s.get("text", ""),
-                        color=s.get("color", "#000000"),
-                        size=s.get("size", 18.0),
-                        x=s.get("x", 0),
-                        y=s.get("y", 0),
-                    )
-
-            elif mtype == "stroke_text_live":
-                live_msg = json.dumps({
-                    "type": "stroke_text_live",
-                    "stroke": msg.get("stroke"),
-                    "user_id": current_sender_id,
-                })
-                for pid, p in self.active_peers.items():
-                    if pid != current_sender_id:
-                        try:
-                            await p.websocket.send_text(live_msg)
-                        except Exception:
-                            pass
-
             elif mtype == "stroke_undo":
                 undone_sid = board_state.undo(current_sender_id)
                 undo_msg = json.dumps({

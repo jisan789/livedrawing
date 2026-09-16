@@ -19,10 +19,9 @@ class DrawingCanvas {
     this.onStrokeChunk = options.onStrokeChunk || (() => {});
     this.onStrokeEnd = options.onStrokeEnd || (() => {});
     this.onCursorMove = options.onCursorMove || (() => {});
-    this.onTextRequest = options.onTextRequest || (() => {});
 
     // Drawing settings
-    this.tool = 0; // 0 = Pen, 1 = Eraser, 2 = Text
+    this.tool = 0; // 0 = Pen, 1 = Eraser
     this.color = '#1e1e1e';
     this.brushSize = 2;
     this.userId = options.userId || 'ME';
@@ -38,8 +37,6 @@ class DrawingCanvas {
 
     // Remote active strokes map: strokeId -> { userId, tool, color, size, points, lastPoint }
     this.remoteActiveStrokes = new Map();
-    // Remote live text editing map: strokeId -> { id, userId, text, color, size, point, lastSeen }
-    this.remoteLiveTexts = new Map();
     // Remote cursors map: userId -> { x, y, isDrawing, color, lastSeen }
     this.remoteCursors = new Map();
 
@@ -125,12 +122,6 @@ class DrawingCanvas {
     if (e.button !== undefined && e.button !== 0) return; // Only primary button
 
     const [normX, normY] = this.toNormalized(e.clientX, e.clientY);
-
-    // Text tool tap handler
-    if (this.tool === 2) {
-      this.onTextRequest({ x: normX, y: normY, clientX: e.clientX, clientY: e.clientY });
-      return;
-    }
 
     this.cursorCanvas.setPointerCapture(e.pointerId);
     this.isDrawing = true;
@@ -345,19 +336,6 @@ class DrawingCanvas {
     const pts = stroke.points;
     if (!pts || pts.length === 0) return;
 
-    // Render Text Element
-    if (stroke.tool === 2 && stroke.text) {
-      const [sx, sy] = this.toScreen(pts[0][0], pts[0][1]);
-      const fontSize = Math.max(14, Math.round((stroke.size || 2) * 6));
-      ctx.save();
-      ctx.font = `600 ${fontSize}px 'Outfit', -apple-system, sans-serif`;
-      ctx.fillStyle = stroke.color || '#1e1e1e';
-      ctx.textBaseline = 'top';
-      ctx.fillText(stroke.text, sx, sy);
-      ctx.restore();
-      return;
-    }
-
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -409,25 +387,6 @@ class DrawingCanvas {
     for (const stroke of this.remoteActiveStrokes.values()) {
       this.renderStroke(this.activeCtx, stroke);
     }
-
-    // Re-render remote live typing text in real time
-    for (const item of this.remoteLiveTexts.values()) {
-      if (item.text && item.point) {
-        const [sx, sy] = this.toScreen(item.point[0], item.point[1]);
-        const fontSize = Math.max(14, Math.round((item.size || 2) * 6));
-        this.activeCtx.save();
-        this.activeCtx.font = `600 ${fontSize}px 'Outfit', -apple-system, sans-serif`;
-        this.activeCtx.fillStyle = item.color || '#1e1e1e';
-        this.activeCtx.textBaseline = 'top';
-        this.activeCtx.fillText(item.text, sx, sy);
-
-        // Blinking live cursor indicator next to remote text
-        const textWidth = this.activeCtx.measureText(item.text).width;
-        this.activeCtx.fillStyle = item.color || '#3b82f6';
-        this.activeCtx.fillRect(sx + textWidth + 2, sy, 2, fontSize);
-        this.activeCtx.restore();
-      }
-    }
   }
 
   redrawAll() {
@@ -451,43 +410,6 @@ class DrawingCanvas {
   // Board State Sync & Mutations (Undo, Redo, Clear, Initial Snapshot)
   // =========================================================================
 
-  handleRemoteLiveText(data) {
-    if (!data.text || !data.text.trim()) {
-      this.remoteLiveTexts.delete(data.strokeId);
-    } else {
-      this.remoteLiveTexts.set(data.strokeId, {
-        strokeId: data.strokeId,
-        userId: data.userId,
-        text: data.text,
-        color: data.color,
-        size: data.size,
-        point: data.point,
-        lastSeen: Date.now(),
-      });
-    }
-    this.clearActiveCanvas();
-    this.renderAllActiveStrokes();
-  }
-
-  handleRemoteStrokeText(data) {
-    this.remoteLiveTexts.delete(data.strokeId);
-    const stroke = {
-      id: data.strokeId,
-      userId: data.userId,
-      tool: 2,
-      text: data.text,
-      color: data.color,
-      size: data.size,
-      points: [data.point],
-      undone: false,
-    };
-    this.committedStrokes.set(stroke.id, stroke);
-    this.strokeOrder.push(stroke.id);
-    this.renderStrokeToBase(stroke);
-    this.clearActiveCanvas();
-    this.renderAllActiveStrokes();
-  }
-
   loadSnapshot(strokesList) {
     this.committedStrokes.clear();
     this.strokeOrder = [];
@@ -500,7 +422,6 @@ class DrawingCanvas {
           color: s.color,
           size: s.size,
           points: s.points,
-          text: s.text,
           undone: s.undone || false,
         };
         this.committedStrokes.set(strokeObj.id, strokeObj);
