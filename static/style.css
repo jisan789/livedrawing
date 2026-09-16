@@ -72,37 +72,36 @@ html, body {
   top: 0;
   left: 0;
   right: 0;
-  height: calc(48px + var(--safe-top));
+  height: calc(44px + var(--safe-top));
   padding-top: var(--safe-top);
-  padding-left: max(12px, var(--safe-left));
-  padding-right: max(12px, var(--safe-right));
+  padding-left: max(8px, var(--safe-left));
+  padding-right: max(8px, var(--safe-right));
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 4px;
   z-index: 100;
   pointer-events: none;
+  overflow: hidden;
 }
 
 .header-left, .header-right {
   display: flex;
   align-items: center;
-  gap: 6px;
-  pointer-events: auto;
-}
-
-.header-controls {
-  display: flex;
-  align-items: center;
   gap: 4px;
+  pointer-events: auto;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
 }
 
 .header-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   background: var(--bg-glass);
   border: 1px solid var(--border-glass);
-  padding: 4px 9px;
+  padding: 4px 7px;
   border-radius: var(--radius-pill);
   font-size: 11px;
   font-weight: 600;
@@ -115,6 +114,7 @@ html, body {
   font-family: inherit;
   user-select: none;
   -webkit-user-select: none;
+  flex-shrink: 0;
 }
 
 .header-btn svg {
@@ -141,39 +141,46 @@ html, body {
 }
 
 .header-btn-label {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
 }
 
-.info-pill {
+.header-stat-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   background: var(--bg-glass);
   border: 1px solid var(--border-glass);
-  padding: 4px 8px;
+  padding: 4px 7px;
   border-radius: var(--radius-pill);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--text-secondary);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   font-family: 'JetBrains Mono', monospace;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
-.pill-icon {
-  width: 12px;
-  height: 12px;
+.stat-icon {
+  width: 11px;
+  height: 11px;
   opacity: 0.8;
+}
+
+.stat-divider {
+  opacity: 0.4;
+  margin: 0 1px;
 }
 
 .user-tag {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   background: var(--bg-glass);
   border: 1px solid var(--border-glass);
-  padding: 4px 8px;
+  padding: 4px 7px;
   border-radius: var(--radius-pill);
   font-size: 10px;
   font-weight: 700;
@@ -183,6 +190,8 @@ html, body {
   cursor: pointer;
   outline: none;
   transition: all 0.15s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .user-tag:hover, .user-tag:active {
@@ -192,8 +201,8 @@ html, body {
 }
 
 .user-color-dot {
-  width: 7px;
-  height: 7px;
+  width: 6.5px;
+  height: 6.5px;
   border-radius: 50%;
   background-color: var(--accent-primary);
   flex-shrink: 0;
@@ -702,8 +711,30 @@ html, body {
 }
 
 /* ==========================================================================
-   Ultra-Small Screen Responsive Tweaks (iPhone SE, Galaxy Fold)
+   Mobile Responsive Tweaks (Android, iPhone SE, Galaxy Fold)
    ========================================================================== */
+@media (max-width: 480px) {
+  #top-bar {
+    padding-left: max(6px, var(--safe-left));
+    padding-right: max(6px, var(--safe-right));
+    gap: 3px;
+  }
+  .header-left, .header-right {
+    gap: 3px;
+  }
+  .header-btn {
+    padding: 4px 6px;
+    gap: 3px;
+  }
+  .header-btn-label {
+    display: none;
+  }
+  .header-stat-pill, .user-tag {
+    font-size: 9.5px;
+    padding: 3px 5px;
+  }
+}
+
 @media (max-width: 360px) {
   .tool-btn {
     min-width: 36px;
@@ -720,9 +751,5 @@ html, body {
   .toolbar-pill {
     padding: 3px 4px;
     gap: 1px;
-  }
-  .info-pill, .user-tag {
-    font-size: 10px;
-    padding: 3px 6px;
   }
 }

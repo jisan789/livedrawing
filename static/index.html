@@ -15,60 +15,49 @@
 </head>
 <body>
   <div id="app-container">
-    <!-- Sleek Top Header Bar -->
+    <!-- Sleek Minimal Top Header Bar -->
     <header id="top-bar">
       <div class="header-left">
-        <div class="header-controls">
-          <!-- Color Trigger -->
-          <button id="btn-color-trigger" class="header-btn" title="Choose Color" aria-label="Color Picker">
-            <span id="active-color-indicator"></span>
-            <span class="header-btn-label">Color</span>
-          </button>
+        <!-- Color Trigger -->
+        <button id="btn-color-trigger" class="header-btn" title="Choose Color" aria-label="Color Picker">
+          <span id="active-color-indicator"></span>
+          <span class="header-btn-label">Color</span>
+        </button>
 
-          <!-- Size Trigger -->
-          <button id="btn-size-trigger" class="header-btn" title="Brush Size" aria-label="Brush Size">
-            <div class="size-icon-dot"></div>
-            <span class="header-btn-label" id="active-size-label">2px</span>
-          </button>
+        <!-- Size Trigger -->
+        <button id="btn-size-trigger" class="header-btn" title="Brush Size" aria-label="Brush Size">
+          <div class="size-icon-dot"></div>
+          <span class="header-btn-label" id="active-size-label">2px</span>
+        </button>
 
-          <!-- Clear Board -->
-          <button id="btn-clear" class="header-btn danger-btn" title="Clear Canvas" aria-label="Clear Canvas">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 6h18"></path>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              <line x1="10" y1="11" x2="10" y2="17"></line>
-              <line x1="14" y1="11" x2="14" y2="17"></line>
-            </svg>
-            <span class="header-btn-label">Clear</span>
-          </button>
-        </div>
+        <!-- Clear Board -->
+        <button id="btn-clear" class="header-btn danger-btn" title="Clear Canvas" aria-label="Clear Canvas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 6h18"></path>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            <line x1="10" y1="11" x2="10" y2="17"></line>
+            <line x1="14" y1="11" x2="14" y2="17"></line>
+          </svg>
+          <span class="header-btn-label">Clear</span>
+        </button>
       </div>
 
       <div class="header-right">
-        <div id="users-pill" class="info-pill" title="Connected Users">
-          <svg class="pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <!-- Minimal Combined Stats (Users & Ping) -->
+        <div class="header-stat-pill" title="Connected Users & Latency">
+          <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
             <circle cx="9" cy="7" r="4"></circle>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
           </svg>
-          <span id="user-count-display">1 USER</span>
+          <span id="user-count-display">1</span>
+          <span class="stat-divider">·</span>
+          <span id="latency-display">&lt;10ms</span>
         </div>
 
-        <div id="latency-pill" class="info-pill" title="Round-trip Latency">
-          <svg class="pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-          </svg>
-          <span id="latency-display">-- ms</span>
-        </div>
-
+        <!-- Minimal User Tag -->
         <button id="my-user-tag" class="user-tag" title="Click to change your display name" aria-label="Change Name">
           <span class="user-color-dot" id="my-user-dot"></span>
           <span id="my-user-id">YOU</span>
-          <svg class="edit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-          </svg>
         </button>
       </div>
     </header>

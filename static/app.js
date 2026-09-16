@@ -86,9 +86,10 @@ document.addEventListener('DOMContentLoaded', () => {
         currentUserId = msg.user_id;
         currentUserColor = msg.color;
         localStorage.setItem('livedraw_username', currentUserId);
-        myUserIdDisplay.textContent = `YOU (${currentUserId})`;
+        myUserIdDisplay.textContent = 'YOU';
+        myUserIdDisplay.title = `Display name: ${currentUserId}`;
         myUserDot.style.backgroundColor = currentUserColor;
-        userCountDisplay.textContent = `${msg.user_count} ${msg.user_count === 1 ? 'USER' : 'USERS'}`;
+        userCountDisplay.textContent = msg.user_count;
 
         if (canvas) {
           canvas.userId = currentUserId;
@@ -102,18 +103,19 @@ document.addEventListener('DOMContentLoaded', () => {
       onUsernameConfirmed: (confirmedName) => {
         currentUserId = confirmedName;
         localStorage.setItem('livedraw_username', currentUserId);
-        myUserIdDisplay.textContent = `YOU (${currentUserId})`;
+        myUserIdDisplay.textContent = 'YOU';
+        myUserIdDisplay.title = `Display name: ${currentUserId}`;
         if (canvas) canvas.userId = currentUserId;
         showToast(`Display name set to ${currentUserId}`);
       },
 
       onPeerJoined: (msg) => {
-        userCountDisplay.textContent = `${msg.user_count} USERS`;
+        userCountDisplay.textContent = msg.user_count;
         showToast(`${msg.user_id} joined`);
       },
 
       onPeerLeft: (msg) => {
-        userCountDisplay.textContent = `${msg.user_count} ${msg.user_count === 1 ? 'USER' : 'USERS'}`;
+        userCountDisplay.textContent = msg.user_count;
         if (canvas) {
           canvas.removeRemoteUser(msg.user_id);
         }
@@ -502,7 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(() => {
     if (net) {
       const netStats = net.getStats();
-      latencyDisplay.textContent = netStats.latencyMs > 0 ? `${netStats.latencyMs} ms` : '< 10 ms';
+      latencyDisplay.textContent = netStats.latencyMs > 0 ? `${netStats.latencyMs}ms` : '<10ms';
     }
   }, 500);
 
