@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentUserColor = '#3b82f6';
   let activeTool = 0; // 0 = Pen, 1 = Eraser
   let activeColor = '#1e1e1e';
-  let activeBrushSize = 4;
+  let activeBrushSize = 2;
   let net = null;
   let canvas = null;
 
@@ -429,5 +429,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize defaults
   setColor('#1e1e1e');
-  setBrushSize(4);
+  setBrushSize(2);
 });

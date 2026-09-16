@@ -23,7 +23,7 @@ class DrawingCanvas {
     // Drawing settings
     this.tool = 0; // 0 = Pen, 1 = Eraser
     this.color = '#1e1e1e';
-    this.brushSize = 4;
+    this.brushSize = 2;
     this.userId = options.userId || 'ME';
 
     // Local drawing state
