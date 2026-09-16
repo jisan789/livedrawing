@@ -617,6 +617,43 @@ class DrawingCanvas {
     this.drawSelectionBox(this.activeCtx);
   }
 
+  getSelectedStrokeScreenBounds() {
+    if (!this.selectedStrokeId) return null;
+    const stroke = this.committedStrokes.get(this.selectedStrokeId);
+    if (!stroke || stroke.undone || !stroke.points || stroke.points.length === 0) return null;
+
+    const bounds = this.getStrokeBounds(stroke);
+    if (!bounds) return null;
+
+    const padScreen = Math.max(8, (stroke.size || 2) + 6);
+    const [minSx, minSy] = this.toScreen(bounds[0], bounds[1]);
+    const [maxSx, maxSy] = this.toScreen(bounds[2], bounds[3]);
+
+    return {
+      x: minSx - padScreen,
+      y: minSy - padScreen,
+      width: (maxSx - minSx) + padScreen * 2,
+      height: (maxSy - minSy) + padScreen * 2,
+      topCenterX: (minSx + maxSx) / 2,
+      topY: minSy - padScreen,
+    };
+  }
+
+  deleteSelectedStroke() {
+    if (!this.selectedStrokeId) return null;
+    const sid = this.selectedStrokeId;
+    const stroke = this.committedStrokes.get(sid);
+    if (stroke) {
+      stroke.undone = true;
+      this.selectedStrokeId = null;
+      this.isDraggingSelection = false;
+      this.onSelectionChange(null);
+      this.redrawAll();
+      return sid;
+    }
+    return null;
+  }
+
   // =========================================================================
   // Board State Sync & Mutations (Undo, Redo, Clear, Initial Snapshot)
   // =========================================================================

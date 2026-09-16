@@ -21,6 +21,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const nameModalTitle = document.getElementById('name-modal-title');
   const nameModalSubtitle = document.getElementById('name-modal-subtitle');
 
+  // Selection Actions
+  const selectionActions = document.getElementById('selection-actions');
+  const btnDeleteSelection = document.getElementById('btn-delete-selection');
+
   // Tool Buttons
   const toolPen = document.getElementById('tool-pen');
   const toolEraser = document.getElementById('tool-eraser');
@@ -230,13 +234,38 @@ document.addEventListener('DOMContentLoaded', () => {
           dx,
           dy,
         });
+        updateSelectionOverlay();
+      },
+
+      onSelectionChange: (strokeId) => {
+        updateSelectionOverlay();
       },
 
       onCursorMove: (normX, normY, isDrawing) => {
         const buffer = Protocol.encodeCursorMove(currentUserId, normX, normY, isDrawing);
         net.broadcastBinary(buffer, true);
+        if (canvas && canvas.isDraggingSelection) {
+          updateSelectionOverlay();
+        }
       },
     });
+  }
+
+  function updateSelectionOverlay() {
+    if (!selectionActions || !canvas) return;
+    if (activeTool === 2 && canvas.selectedStrokeId) {
+      const bounds = canvas.getSelectedStrokeScreenBounds();
+      if (bounds) {
+        selectionActions.classList.remove('hidden');
+        const contW = container.clientWidth || window.innerWidth;
+        const clampedX = Math.max(65, Math.min(contW - 65, bounds.topCenterX));
+        const clampedY = Math.max(45, bounds.topY);
+        selectionActions.style.left = `${clampedX}px`;
+        selectionActions.style.top = `${clampedY}px`;
+        return;
+      }
+    }
+    selectionActions.classList.add('hidden');
   }
 
   // =========================================================================
@@ -300,6 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
     toolPen.classList.toggle('active', toolIndex === 0);
     toolEraser.classList.toggle('active', toolIndex === 1);
     if (toolSelect) toolSelect.classList.toggle('active', toolIndex === 2);
+    updateSelectionOverlay();
     closeTrays();
   }
 
@@ -341,6 +371,24 @@ document.addEventListener('DOMContentLoaded', () => {
   toolPen.addEventListener('click', () => selectTool(0));
   toolEraser.addEventListener('click', () => selectTool(1));
   if (toolSelect) toolSelect.addEventListener('click', () => selectTool(2));
+
+  // Delete Selection Handler
+  if (btnDeleteSelection) {
+    btnDeleteSelection.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!canvas) return;
+      const deletedSid = canvas.deleteSelectedStroke();
+      if (deletedSid) {
+        const buffer = Protocol.encodeStrokeUndo(currentUserId, deletedSid);
+        if (net) {
+          net.broadcastBinary(buffer, false);
+          net.sendServerMessage({ type: 'stroke_undo' });
+        }
+        updateSelectionOverlay();
+        showToast('Element deleted');
+      }
+    });
+  }
 
   btnColorTrigger.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -409,6 +457,11 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
       e.preventDefault();
       btnRedo.click();
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (canvas && canvas.selectedStrokeId) {
+        e.preventDefault();
+        if (btnDeleteSelection) btnDeleteSelection.click();
+      }
     } else if (e.key.toLowerCase() === 'p') {
       selectTool(0);
     } else if (e.key.toLowerCase() === 'e') {
