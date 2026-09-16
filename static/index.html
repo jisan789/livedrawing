@@ -18,10 +18,33 @@
     <!-- Sleek Top Header Bar -->
     <header id="top-bar">
       <div class="header-left">
-        <div class="live-badge">
-          <span class="live-dot"></span>
-          <span class="live-text">LIVE CANVAS</span>
+        <div class="header-controls">
+          <!-- Color Trigger -->
+          <button id="btn-color-trigger" class="header-btn" title="Choose Color" aria-label="Color Picker">
+            <span id="active-color-indicator"></span>
+            <span class="header-btn-label">Color</span>
+          </button>
+
+          <!-- Size Trigger -->
+          <button id="btn-size-trigger" class="header-btn" title="Brush Size" aria-label="Brush Size">
+            <div class="size-icon-dot"></div>
+            <span class="header-btn-label" id="active-size-label">2px</span>
+          </button>
+
+          <!-- Clear Board -->
+          <button id="btn-clear" class="header-btn danger-btn" title="Clear Canvas" aria-label="Clear Canvas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18"></path>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+            <span class="header-btn-label">Clear</span>
+          </button>
         </div>
+      </div>
+
+      <div class="header-right">
         <div id="users-pill" class="info-pill" title="Connected Users">
           <svg class="pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
@@ -31,15 +54,14 @@
           </svg>
           <span id="user-count-display">1 USER</span>
         </div>
-      </div>
 
-      <div class="header-right">
         <div id="latency-pill" class="info-pill" title="Round-trip Latency">
           <svg class="pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
           </svg>
           <span id="latency-display">-- ms</span>
         </div>
+
         <button id="my-user-tag" class="user-tag" title="Click to change your display name" aria-label="Change Name">
           <span class="user-color-dot" id="my-user-dot"></span>
           <span id="my-user-id">YOU</span>
@@ -101,11 +123,11 @@
       </div>
     </div>
 
-    <!-- Bottom Floating Toolbar -->
+    <!-- Bottom Floating Toolbar (Compact Single Row) -->
     <nav id="bottom-bar">
       <div class="toolbar-pill">
         <!-- Pen Tool -->
-        <button id="tool-pen" class="tool-btn active" title="Pen" aria-label="Pen Tool">
+        <button id="tool-pen" class="tool-btn active" title="Pen (P)" aria-label="Pen Tool">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
             <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
@@ -116,7 +138,7 @@
         </button>
 
         <!-- Eraser Tool -->
-        <button id="tool-eraser" class="tool-btn" title="Eraser" aria-label="Eraser Tool">
+        <button id="tool-eraser" class="tool-btn" title="Eraser (E)" aria-label="Eraser Tool">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path>
             <path d="M22 21H7"></path>
@@ -147,22 +169,8 @@
 
         <div class="tool-divider"></div>
 
-        <!-- Color Trigger -->
-        <button id="btn-color-trigger" class="tool-btn action-btn" title="Choose Color" aria-label="Color Picker">
-          <span id="active-color-indicator"></span>
-          <span class="tool-label">Color</span>
-        </button>
-
-        <!-- Size Trigger -->
-        <button id="btn-size-trigger" class="tool-btn action-btn" title="Brush Size" aria-label="Brush Size">
-          <div class="size-icon-dot"></div>
-          <span class="tool-label" id="active-size-label">2px</span>
-        </button>
-
-        <div class="tool-divider"></div>
-
         <!-- Undo -->
-        <button id="btn-undo" class="tool-btn action-btn" title="Undo" aria-label="Undo">
+        <button id="btn-undo" class="tool-btn action-btn" title="Undo (Ctrl+Z)" aria-label="Undo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 7v6h6"></path>
             <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
@@ -171,25 +179,12 @@
         </button>
 
         <!-- Redo -->
-        <button id="btn-redo" class="tool-btn action-btn" title="Redo" aria-label="Redo">
+        <button id="btn-redo" class="tool-btn action-btn" title="Redo (Ctrl+Y)" aria-label="Redo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 7v6h-6"></path>
             <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"></path>
           </svg>
           <span class="tool-label">Redo</span>
-        </button>
-
-        <div class="tool-divider"></div>
-
-        <!-- Clear Board -->
-        <button id="btn-clear" class="tool-btn danger-btn" title="Clear Canvas" aria-label="Clear Canvas">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 6h18"></path>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-            <line x1="10" y1="11" x2="10" y2="17"></line>
-            <line x1="14" y1="11" x2="14" y2="17"></line>
-          </svg>
-          <span class="tool-label">Clear</span>
         </button>
       </div>
     </nav>

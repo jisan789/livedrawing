@@ -90,35 +90,59 @@ html, body {
   pointer-events: auto;
 }
 
-.live-badge {
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.header-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  padding: 4px 8px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-glass);
+  padding: 4px 9px;
   border-radius: var(--radius-pill);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: #ff6b6b;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.live-dot {
-  width: 6px;
-  height: 6px;
-  background-color: var(--color-red);
-  border-radius: 50%;
-  box-shadow: 0 0 8px var(--color-red);
-  animation: pulse-dot 1.8s infinite ease-in-out;
+.header-btn svg {
+  width: 13px;
+  height: 13px;
+  opacity: 0.85;
 }
 
-@keyframes pulse-dot {
-  0% { transform: scale(0.9); opacity: 0.8; }
-  50% { transform: scale(1.3); opacity: 1; box-shadow: 0 0 10px var(--color-red); }
-  100% { transform: scale(0.9); opacity: 0.8; }
+.header-btn:hover {
+  border-color: var(--border-glass-active);
+  background: var(--bg-glass-card);
+  color: var(--text-primary);
+  transform: scale(1.02);
+}
+
+.header-btn:active {
+  transform: scale(0.96);
+}
+
+.header-btn.danger-btn:hover, .header-btn.danger-btn:active {
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ff6b6b;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.header-btn-label {
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .info-pill {
@@ -378,9 +402,9 @@ html, body {
    ========================================================================== */
 .floating-tray {
   position: absolute;
-  bottom: calc(64px + var(--safe-bottom));
-  left: 50%;
-  transform: translateX(-50%) translateY(0);
+  top: max(48px, calc(env(safe-area-inset-top) + 42px));
+  left: 12px;
+  transform: translateY(0);
   background: var(--bg-glass-card);
   border: 1px solid var(--border-glass);
   border-radius: var(--radius-lg);
@@ -397,7 +421,7 @@ html, body {
 .floating-tray.hidden {
   opacity: 0;
   pointer-events: none;
-  transform: translateX(-50%) translateY(10px) scale(0.94);
+  transform: translateY(-8px) scale(0.96);
 }
 
 /* Color Palette */
