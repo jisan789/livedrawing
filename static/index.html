@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0d0f17">
+  <title>LiveDraw — Mobile-First Real-Time Drawing</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div id="app-container">
+    <!-- Top Header Bar -->
+    <header id="top-bar">
+      <div class="header-left">
+        <div class="live-badge">
+          <span class="live-dot"></span>
+          <span class="live-text">LIVE</span>
+        </div>
+        <div id="users-pill" class="info-pill" title="Connected Users">
+          <svg class="pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+          <span id="user-count-display">1 USER</span>
+        </div>
+        <div id="my-user-tag" class="user-tag" title="Your User ID">
+          <span class="user-color-dot" id="my-user-dot"></span>
+          <span id="my-user-id">YOU</span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <div id="latency-pill" class="info-pill" title="Network Latency">
+          <svg class="pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+          <span id="latency-display">-- ms</span>
+        </div>
+        <div id="webrtc-badge" class="channel-badge" title="WebRTC DataChannel Status">
+          <span class="webrtc-icon">⚡</span>
+          <span id="webrtc-status">P2P DC</span>
+        </div>
+        <button id="btn-stats-toggle" class="header-icon-btn" aria-label="Open Network Statistics" title="Statistics">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 20V10M12 20V4M6 20v-6"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Canvas Viewport -->
+    <main id="canvas-container">
+      <canvas id="base-canvas" class="drawing-layer"></canvas>
+      <canvas id="active-canvas" class="drawing-layer"></canvas>
+      <canvas id="cursor-canvas" class="drawing-layer"></canvas>
+    </main>
+
+    <!-- Floating Color Picker Tray -->
+    <div id="color-tray" class="floating-tray hidden">
+      <div class="color-palette">
+        <button class="color-swatch active" data-color="#1e1e1e" style="--c: #1e1e1e;" aria-label="Black"></button>
+        <button class="color-swatch" data-color="#ef4444" style="--c: #ef4444;" aria-label="Red"></button>
+        <button class="color-swatch" data-color="#f97316" style="--c: #f97316;" aria-label="Orange"></button>
+        <button class="color-swatch" data-color="#eab308" style="--c: #eab308;" aria-label="Yellow"></button>
+        <button class="color-swatch" data-color="#10b981" style="--c: #10b981;" aria-label="Green"></button>
+        <button class="color-swatch" data-color="#06b6d4" style="--c: #06b6d4;" aria-label="Cyan"></button>
+        <button class="color-swatch" data-color="#3b82f6" style="--c: #3b82f6;" aria-label="Blue"></button>
+        <button class="color-swatch" data-color="#8b5cf6" style="--c: #8b5cf6;" aria-label="Purple"></button>
+        <button class="color-swatch" data-color="#ec4899" style="--c: #ec4899;" aria-label="Pink"></button>
+        <button class="color-swatch" data-color="#ffffff" style="--c: #ffffff;" aria-label="White"></button>
+        <label class="custom-color-btn" title="Custom Color">
+          <input type="color" id="custom-color-input" value="#1e1e1e">
+          <span class="custom-color-icon">🎨</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Floating Size Slider Tray -->
+    <div id="size-tray" class="floating-tray hidden">
+      <div class="size-controls">
+        <div class="size-preview-wrapper">
+          <div id="size-preview-dot"></div>
+        </div>
+        <input type="range" id="size-slider" min="1" max="40" value="4" step="1">
+        <span id="size-value-display">4px</span>
+      </div>
+    </div>
+
+    <!-- Bottom Floating Toolbar -->
+    <nav id="bottom-bar">
+      <div class="toolbar-pill">
+        <!-- Pen Tool -->
+        <button id="tool-pen" class="tool-btn active" title="Pen (P)" aria-label="Pen Tool">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+            <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+            <path d="M2 2l7.586 7.586"></path>
+            <circle cx="11" cy="11" r="2"></circle>
+          </svg>
+          <span class="tool-label">Pen</span>
+        </button>
+
+        <!-- Eraser Tool -->
+        <button id="tool-eraser" class="tool-btn" title="Eraser (E)" aria-label="Eraser Tool">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path>
+            <path d="M22 21H7"></path>
+            <path d="m5 11 9 9"></path>
+          </svg>
+          <span class="tool-label">Eraser</span>
+        </button>
+
+        <div class="tool-divider"></div>
+
+        <!-- Color Trigger -->
+        <button id="btn-color-trigger" class="tool-btn action-btn" title="Choose Color" aria-label="Color Picker">
+          <span id="active-color-indicator"></span>
+          <span class="tool-label">Color</span>
+        </button>
+
+        <!-- Size Trigger -->
+        <button id="btn-size-trigger" class="tool-btn action-btn" title="Brush Size" aria-label="Brush Size">
+          <div class="size-icon-dot"></div>
+          <span class="tool-label" id="active-size-label">4px</span>
+        </button>
+
+        <div class="tool-divider"></div>
+
+        <!-- Undo -->
+        <button id="btn-undo" class="tool-btn action-btn" title="Undo (Ctrl+Z)" aria-label="Undo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 7v6h6"></path>
+            <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+          </svg>
+          <span class="tool-label">Undo</span>
+        </button>
+
+        <!-- Redo -->
+        <button id="btn-redo" class="tool-btn action-btn" title="Redo (Ctrl+Y)" aria-label="Redo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 7v6h-6"></path>
+            <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"></path>
+          </svg>
+          <span class="tool-label">Redo</span>
+        </button>
+
+        <div class="tool-divider"></div>
+
+        <!-- Clear Board -->
+        <button id="btn-clear" class="tool-btn danger-btn" title="Clear Canvas" aria-label="Clear Canvas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 6h18"></path>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            <line x1="10" y1="11" x2="10" y2="17"></line>
+            <line x1="14" y1="11" x2="14" y2="17"></line>
+          </svg>
+          <span class="tool-label">Clear</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Detailed Stats Modal -->
+    <div id="stats-modal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="modal-title-icon">
+              <path d="M18 20V10M12 20V4M6 20v-6"></path>
+            </svg>
+            Live Performance & Network
+          </h3>
+          <button id="btn-close-stats" class="modal-close-btn">&times;</button>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <span class="stat-label">Connected Users</span>
+            <span class="stat-value" id="stat-users">1</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">WebRTC Status</span>
+            <span class="stat-value highlight" id="stat-webrtc">Connected</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">DataChannels Open</span>
+            <span class="stat-value" id="stat-channels">0</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Round-Trip Latency</span>
+            <span class="stat-value" id="stat-latency">-- ms</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Bytes Sent</span>
+            <span class="stat-value" id="stat-bytes-sent">0 KB</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Bytes Received</span>
+            <span class="stat-value" id="stat-bytes-recv">0 KB</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Packets Sent</span>
+            <span class="stat-value" id="stat-packets-sent">0</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Packets Received</span>
+            <span class="stat-value" id="stat-packets-recv">0</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Active Stroke Points</span>
+            <span class="stat-value" id="stat-stroke-points">0</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Total Strokes</span>
+            <span class="stat-value" id="stat-total-strokes">0</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Data Reduction Rate</span>
+            <span class="stat-value text-green" id="stat-reduction">~88%</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Protocol Mode</span>
+            <span class="stat-value" id="stat-protocol">Binary (TypedArray)</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <span class="protocol-badge">⚡ Delta-Compressed Vector Protocol (No Canvas Images)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification Overlay -->
+    <div id="toast-container"></div>
+  </div>
+
+  <script src="/static/protocol.js"></script>
+  <script src="/static/webrtc.js"></script>
+  <script src="/static/canvas.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
