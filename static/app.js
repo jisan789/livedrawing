@@ -25,6 +25,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectionActions = document.getElementById('selection-actions');
   const btnDeleteSelection = document.getElementById('btn-delete-selection');
 
+  // Reference Image Controls
+  const btnImportImage = document.getElementById('btn-import-image');
+  const imageUploadInput = document.getElementById('image-upload-input');
+  const refImageBar = document.getElementById('reference-image-bar');
+  const btnRefLock = document.getElementById('btn-ref-lock');
+  const refLockLabel = document.getElementById('ref-lock-label');
+  const iconUnlocked = btnRefLock ? btnRefLock.querySelector('.icon-unlocked') : null;
+  const iconLocked = btnRefLock ? btnRefLock.querySelector('.icon-locked') : null;
+  const btnRefOpacity = document.getElementById('btn-ref-opacity');
+  const refOpacityLabel = document.getElementById('ref-opacity-label');
+  const btnRefDelete = document.getElementById('btn-ref-delete');
+
   // Tool Buttons
   const toolPen = document.getElementById('tool-pen');
   const toolEraser = document.getElementById('tool-eraser');
@@ -255,6 +267,10 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSelectionOverlay();
       },
 
+      onReferenceImageChange: (refImage) => {
+        updateRefImageBar(refImage);
+      },
+
       onCursorMove: (normX, normY, isDrawing) => {
         const buffer = Protocol.encodeCursorMove(currentUserId, normX, normY, isDrawing);
         net.broadcastBinary(buffer, true);
@@ -263,6 +279,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       },
     });
+  }
+
+  function updateRefImageBar(refImage) {
+    if (!refImageBar) return;
+    if (!refImage) {
+      refImageBar.classList.add('hidden');
+      return;
+    }
+    refImageBar.classList.remove('hidden');
+
+    if (refImage.locked) {
+      btnRefLock.classList.add('active-lock');
+      if (refLockLabel) refLockLabel.textContent = 'Locked';
+      if (iconUnlocked) iconUnlocked.classList.add('hidden');
+      if (iconLocked) iconLocked.classList.remove('hidden');
+    } else {
+      btnRefLock.classList.remove('active-lock');
+      if (refLockLabel) refLockLabel.textContent = 'Lock';
+      if (iconUnlocked) iconUnlocked.classList.remove('hidden');
+      if (iconLocked) iconLocked.classList.add('hidden');
+    }
+
+    const pct = Math.round((refImage.opacity !== undefined ? refImage.opacity : 0.5) * 100);
+    if (refOpacityLabel) refOpacityLabel.textContent = `${pct}%`;
   }
 
   function updateSelectionOverlay() {
@@ -469,6 +509,63 @@ document.addEventListener('DOMContentLoaded', () => {
       if (canvas) canvas.clearBoard();
     }
   });
+
+  // =========================================================================
+  // Reference Image Handlers (Local-Only Tracing Layer)
+  // =========================================================================
+
+  if (btnImportImage && imageUploadInput) {
+    btnImportImage.addEventListener('click', () => {
+      closeTrays();
+      imageUploadInput.click();
+    });
+
+    imageUploadInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const img = new Image();
+        img.onload = () => {
+          if (canvas) {
+            canvas.setReferenceImage(img);
+            showToast('Image loaded at 50% opacity. Adjust & tap Lock to trace.');
+          }
+        };
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+      imageUploadInput.value = '';
+    });
+  }
+
+  if (btnRefLock) {
+    btnRefLock.addEventListener('click', () => {
+      if (!canvas || !canvas.referenceImage) return;
+      const isLocked = !canvas.referenceImage.locked;
+      canvas.lockReferenceImage(isLocked);
+      showToast(isLocked ? '🔒 Locked: draw and trace freely over image' : '🔓 Unlocked: drag or resize image position');
+    });
+  }
+
+  if (btnRefOpacity) {
+    btnRefOpacity.addEventListener('click', () => {
+      if (!canvas || !canvas.referenceImage) return;
+      const opacities = [0.5, 0.25, 0.75, 1.0];
+      const curr = canvas.referenceImage.opacity !== undefined ? canvas.referenceImage.opacity : 0.5;
+      const nextIdx = (opacities.indexOf(curr) + 1) % opacities.length;
+      canvas.setReferenceImageOpacity(opacities[nextIdx]);
+    });
+  }
+
+  if (btnRefDelete) {
+    btnRefDelete.addEventListener('click', () => {
+      if (!canvas) return;
+      canvas.removeReferenceImage();
+      showToast('Reference image removed.');
+    });
+  }
 
   // Keyboard Shortcuts
   window.addEventListener('keydown', (e) => {

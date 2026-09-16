@@ -22,12 +22,21 @@ class DrawingCanvas {
     this.onCursorMove = options.onCursorMove || (() => {});
     this.onSelectionChange = options.onSelectionChange || (() => {});
     this.onZoomChange = options.onZoomChange || (() => {});
+    this.onReferenceImageChange = options.onReferenceImageChange || (() => {});
 
     // Drawing settings
     this.tool = 0; // 0 = Pen, 1 = Eraser, 2 = Select, 3 = Zoom/Pan
     this.color = '#1e1e1e';
     this.brushSize = 2;
     this.userId = options.userId || 'ME';
+
+    // Local Reference Image Layer (Strictly local, 50% opacity default, lockable)
+    this.referenceImage = null; // { img, x, y, width, height, opacity, locked, visible, loaded }
+    this.isDraggingRefImage = false;
+    this.isResizingRefImage = false;
+    this.refResizeHandle = null;
+    this.refDragStart = [0, 0];
+    this.refInitialState = null;
 
     // Viewport Navigation (Zoom & Pan)
     this.zoom = 1.0;
@@ -283,6 +292,51 @@ class DrawingCanvas {
     );
   }
 
+  // Reference Image Geometry Helpers
+  isPointInsideRefImage(normX, normY) {
+    if (!this.referenceImage || !this.referenceImage.visible) return false;
+    const { x, y, width, height } = this.referenceImage;
+    return normX >= x && normX <= x + width && normY >= y && normY <= y + height;
+  }
+
+  getRefImageScreenBounds() {
+    if (!this.referenceImage || !this.referenceImage.visible) return null;
+    const ref = this.referenceImage;
+    const [sx, sy] = this.toScreen(ref.x, ref.y);
+    const sw = (ref.width / COORD_SCALE) * this.width * this.zoom;
+    const sh = (ref.height / COORD_SCALE) * this.height * this.zoom;
+    return { x: sx, y: sy, width: sw, height: sh };
+  }
+
+  getRefImageHandles() {
+    const b = this.getRefImageScreenBounds();
+    if (!b) return {};
+    const { x, y, width, height } = b;
+    return {
+      nw: [x, y],
+      n: [x + width / 2, y],
+      ne: [x + width, y],
+      e: [x + width, y + height / 2],
+      se: [x + width, y + height],
+      s: [x + width / 2, y + height],
+      sw: [x, y + height],
+      w: [x, y + height / 2],
+    };
+  }
+
+  getRefImageHandleUnderPointer(sx, sy) {
+    if (!this.referenceImage || this.referenceImage.locked || !this.referenceImage.visible) return null;
+    const handles = this.getRefImageHandles();
+    const hitRadius = 14;
+    for (const [name, pos] of Object.entries(handles)) {
+      const distSq = (sx - pos[0]) ** 2 + (sy - pos[1]) ** 2;
+      if (distSq <= hitRadius ** 2) {
+        return name;
+      }
+    }
+    return null;
+  }
+
   distToSegmentSq(px, py, x1, y1, x2, y2) {
     const l2 = (x2 - x1) ** 2 + (y2 - y1) ** 2;
     if (l2 === 0) return (px - x1) ** 2 + (py - y1) ** 2;
@@ -415,6 +469,39 @@ class DrawingCanvas {
 
     const [normX, normY] = this.toNormalized(e.clientX, e.clientY);
     const [sx, sy] = this.toScreen(normX, normY);
+
+    // Check Unlocked Reference Image Interaction (resize handles or drag move)
+    if (this.referenceImage && !this.referenceImage.locked && this.referenceImage.visible) {
+      const refHandle = this.getRefImageHandleUnderPointer(sx, sy);
+      if (refHandle) {
+        this.isResizingRefImage = true;
+        this.refResizeHandle = refHandle;
+        this.refDragStart = [normX, normY];
+        this.refInitialState = {
+          x: this.referenceImage.x,
+          y: this.referenceImage.y,
+          width: this.referenceImage.width,
+          height: this.referenceImage.height,
+        };
+        try { this.cursorCanvas.setPointerCapture(e.pointerId); } catch (_) {}
+        this.redrawAll();
+        return;
+      }
+
+      if (this.isPointInsideRefImage(normX, normY)) {
+        this.isDraggingRefImage = true;
+        this.refDragStart = [normX, normY];
+        this.refInitialState = {
+          x: this.referenceImage.x,
+          y: this.referenceImage.y,
+          width: this.referenceImage.width,
+          height: this.referenceImage.height,
+        };
+        try { this.cursorCanvas.setPointerCapture(e.pointerId); } catch (_) {}
+        this.redrawAll();
+        return;
+      }
+    }
 
     // Select Tool handler
     if (this.tool === 2) {
@@ -554,13 +641,66 @@ class DrawingCanvas {
       return;
     }
 
-    if (this.tool === 3) return;
-
     const [normX, normY] = this.toNormalized(e.clientX, e.clientY);
     const [sx, sy] = this.toScreen(normX, normY);
     
     // Broadcast cursor position
-    this.onCursorMove(normX, normY, this.isDrawing || this.isDraggingSelection || this.isResizing);
+    this.onCursorMove(normX, normY, this.isDrawing || this.isDraggingSelection || this.isResizing || this.isDraggingRefImage || this.isResizingRefImage);
+
+    // Handle Unlocked Reference Image Dragging & Resizing
+    if (this.isDraggingRefImage && this.referenceImage && this.refInitialState) {
+      const dx = normX - this.refDragStart[0];
+      const dy = normY - this.refDragStart[1];
+      this.referenceImage.x = Math.max(0, Math.min(COORD_SCALE - this.referenceImage.width, this.refInitialState.x + dx));
+      this.referenceImage.y = Math.max(0, Math.min(COORD_SCALE - this.referenceImage.height, this.refInitialState.y + dy));
+      this.redrawAll();
+      return;
+    }
+
+    if (this.isResizingRefImage && this.referenceImage && this.refInitialState) {
+      const dx = normX - this.refDragStart[0];
+      const dy = normY - this.refDragStart[1];
+      const handle = this.refResizeHandle;
+      const init = this.refInitialState;
+
+      let newX = init.x;
+      let newY = init.y;
+      let newW = init.width;
+      let newH = init.height;
+
+      if (handle.includes('e')) newW = Math.max(400, init.width + dx);
+      if (handle.includes('s')) newH = Math.max(400, init.height + dy);
+      if (handle.includes('w')) {
+        const delta = Math.min(dx, init.width - 400);
+        newX = init.x + delta;
+        newW = init.width - delta;
+      }
+      if (handle.includes('n')) {
+        const delta = Math.min(dy, init.height - 400);
+        newY = init.y + delta;
+        newH = init.height - delta;
+      }
+
+      this.referenceImage.x = Math.max(0, newX);
+      this.referenceImage.y = Math.max(0, newY);
+      this.referenceImage.width = Math.min(COORD_SCALE - this.referenceImage.x, newW);
+      this.referenceImage.height = Math.min(COORD_SCALE - this.referenceImage.y, newH);
+      this.redrawAll();
+      return;
+    }
+
+    // Hover cursor for Unlocked Reference Image
+    if (this.referenceImage && !this.referenceImage.locked && this.referenceImage.visible && !this.isDrawing && !this.isDraggingSelection && !this.isResizing && !this.isMarqueeSelecting) {
+      const refHandle = this.getRefImageHandleUnderPointer(sx, sy);
+      if (refHandle) {
+        if (refHandle === 'nw' || refHandle === 'se') this.cursorCanvas.style.cursor = 'nwse-resize';
+        else if (refHandle === 'ne' || refHandle === 'sw') this.cursorCanvas.style.cursor = 'nesw-resize';
+        else if (refHandle === 'n' || refHandle === 's') this.cursorCanvas.style.cursor = 'ns-resize';
+        else if (refHandle === 'w' || refHandle === 'e') this.cursorCanvas.style.cursor = 'ew-resize';
+      } else if (this.isPointInsideRefImage(normX, normY)) {
+        this.cursorCanvas.style.cursor = 'move';
+      }
+    }
 
     // In Select Mode
     if (this.tool === 2) {
@@ -703,6 +843,18 @@ class DrawingCanvas {
 
   handlePointerUp(e) {
     this.activePointers.delete(e.pointerId);
+
+    if (this.isDraggingRefImage || this.isResizingRefImage) {
+      this.isDraggingRefImage = false;
+      this.isResizingRefImage = false;
+      this.refResizeHandle = null;
+      try {
+        this.cursorCanvas.releasePointerCapture(e.pointerId);
+      } catch (_) {}
+      this.onReferenceImageChange(this.referenceImage);
+      this.redrawAll();
+      return;
+    }
 
     if (this.isPinching) {
       if (this.activePointers.size < 2) {
@@ -1023,7 +1175,12 @@ class DrawingCanvas {
     this.baseCtx.fillStyle = '#ffffff';
     this.baseCtx.fillRect(0, 0, this.width, this.height);
 
-    // Draw all non-undone committed strokes
+    // 1. Render Local Reference Image (underneath all strokes at 50% opacity)
+    if (this.referenceImage && this.referenceImage.loaded) {
+      this.renderReferenceImage(this.baseCtx);
+    }
+
+    // 2. Draw all non-undone committed strokes
     for (const sid of this.strokeOrder) {
       const stroke = this.committedStrokes.get(sid);
       if (stroke && !stroke.undone) {
@@ -1034,6 +1191,124 @@ class DrawingCanvas {
     this.clearActiveCanvas();
     this.renderAllActiveStrokes();
     this.drawSelectionBox(this.activeCtx);
+
+    // 3. Draw Unlocked Reference Image Bounding Box & Handles
+    if (this.referenceImage && !this.referenceImage.locked && this.referenceImage.visible) {
+      this.drawReferenceImageOverlay(this.activeCtx);
+    }
+  }
+
+  // =========================================================================
+  // Local Reference Image API (Tracing & Reference Overlay)
+  // =========================================================================
+
+  setReferenceImage(img) {
+    if (!img) return;
+
+    const aspect = (img.naturalWidth || img.width || 1) / (img.naturalHeight || img.height || 1);
+    let targetNormW = 5000;
+    let targetNormH = Math.round(5000 / aspect);
+    if (targetNormH > 7500) {
+      targetNormH = 7500;
+      targetNormW = Math.round(7500 * aspect);
+    }
+
+    const [centerNormX, centerNormY] = this.toNormalized(this.width / 2, this.height / 2);
+    const normX = Math.max(0, Math.min(COORD_SCALE - targetNormW, Math.round(centerNormX - targetNormW / 2)));
+    const normY = Math.max(0, Math.min(COORD_SCALE - targetNormH, Math.round(centerNormY - targetNormH / 2)));
+
+    this.referenceImage = {
+      img: img,
+      x: normX,
+      y: normY,
+      width: targetNormW,
+      height: targetNormH,
+      opacity: 0.5,
+      locked: false,
+      visible: true,
+      loaded: true,
+    };
+
+    this.onReferenceImageChange(this.referenceImage);
+    this.redrawAll();
+  }
+
+  renderReferenceImage(ctx) {
+    if (!this.referenceImage || !this.referenceImage.visible || !this.referenceImage.img) return;
+    const ref = this.referenceImage;
+    const [sx, sy] = this.toScreen(ref.x, ref.y);
+    const sw = (ref.width / COORD_SCALE) * this.width * this.zoom;
+    const sh = (ref.height / COORD_SCALE) * this.height * this.zoom;
+
+    ctx.save();
+    ctx.globalAlpha = ref.opacity !== undefined ? ref.opacity : 0.5;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(ref.img, sx, sy, sw, sh);
+    ctx.restore();
+  }
+
+  drawReferenceImageOverlay(ctx) {
+    if (!this.referenceImage || this.referenceImage.locked || !this.referenceImage.visible) return;
+    const ref = this.referenceImage;
+    const [sx, sy] = this.toScreen(ref.x, ref.y);
+    const sw = (ref.width / COORD_SCALE) * this.width * this.zoom;
+    const sh = (ref.height / COORD_SCALE) * this.height * this.zoom;
+
+    ctx.save();
+    // Bounding box dashed outline
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(sx, sy, sw, sh);
+
+    // 8 handles
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 1.5;
+    const handleSize = 8;
+    const handles = this.getRefImageHandles();
+
+    for (const [hx, hy] of Object.values(handles)) {
+      ctx.fillRect(hx - handleSize / 2, hy - handleSize / 2, handleSize, handleSize);
+      ctx.strokeRect(hx - handleSize / 2, hy - handleSize / 2, handleSize, handleSize);
+    }
+    ctx.restore();
+  }
+
+  setReferenceImageOpacity(opacity) {
+    if (this.referenceImage) {
+      this.referenceImage.opacity = Math.max(0.1, Math.min(1.0, opacity));
+      this.onReferenceImageChange(this.referenceImage);
+      this.redrawAll();
+    }
+  }
+
+  lockReferenceImage(locked) {
+    if (this.referenceImage) {
+      this.referenceImage.locked = locked;
+      this.isDraggingRefImage = false;
+      this.isResizingRefImage = false;
+      this.onReferenceImageChange(this.referenceImage);
+      this.redrawAll();
+    }
+  }
+
+  toggleReferenceImageVisibility() {
+    if (this.referenceImage) {
+      this.referenceImage.visible = !this.referenceImage.visible;
+      this.onReferenceImageChange(this.referenceImage);
+      this.redrawAll();
+    }
+  }
+
+  removeReferenceImage() {
+    this.referenceImage = null;
+    this.isDraggingRefImage = false;
+    this.isResizingRefImage = false;
+    this.onReferenceImageChange(null);
+    this.redrawAll();
   }
 
   getSelectedStrokeScreenBounds() {

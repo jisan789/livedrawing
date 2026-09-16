@@ -294,6 +294,107 @@ html, body {
 }
 
 /* ==========================================================================
+   Floating Local Reference Image Control Bar
+   ========================================================================== */
+.reference-image-bar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-glass);
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  animation: popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+}
+
+.reference-image-bar.hidden {
+  display: none !important;
+}
+
+.ref-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #60a5fa;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin-right: 2px;
+}
+
+.ref-badge-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: #3b82f6;
+  box-shadow: 0 0 6px #3b82f6;
+}
+
+.ref-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-glass);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.ref-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.ref-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  transform: translateY(-1px);
+}
+
+.ref-btn:active {
+  transform: translateY(0);
+}
+
+.ref-btn.active-lock {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+.ref-btn.danger-btn {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.ref-btn.danger-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  color: #ffffff;
+}
+
+/* ==========================================================================
    Bottom Floating Toolbar (Mobile-First Touch Optimized)
    ========================================================================== */
 #bottom-bar {
@@ -732,6 +833,18 @@ html, body {
   .header-stat-pill, .user-tag {
     font-size: 9.5px;
     padding: 3px 5px;
+  }
+  .reference-image-bar {
+    top: 6px;
+    padding: 3px 6px;
+    gap: 3px;
+  }
+  .ref-badge-text {
+    display: none;
+  }
+  .ref-btn {
+    padding: 3px 6px;
+    font-size: 10px;
   }
 }
 
