@@ -35,6 +35,9 @@ class WebRTCManager {
     this.onStatsUpdate = options.onStatsUpdate || (() => {});
     this.onChatMessage = options.onChatMessage || (() => {});
     this.onInvalidPin = options.onInvalidPin || (() => {});
+    this.onStrokeStart = options.onStrokeStart || (() => {});
+    this.onStrokeChunk = options.onStrokeChunk || (() => {});
+    this.onStrokeEnd = options.onStrokeEnd || (() => {});
 
     this.offlineQueue = [];
     this.init();
@@ -178,9 +181,6 @@ class WebRTCManager {
 
       case 'peer_joined':
         this.onPeerJoined(msg);
-        if (msg.user_id !== this.userId && !this.peers.has(msg.user_id)) {
-          this.createPeerConnection(msg.user_id, true);
-        }
         break;
 
       case 'peer_left':
@@ -200,6 +200,18 @@ class WebRTCManager {
 
       case 'signal':
         this.handlePeerSignal(msg.sender, msg.data);
+        break;
+
+      case 'stroke_start':
+        this.onStrokeStart(msg);
+        break;
+
+      case 'stroke_chunk':
+        this.onStrokeChunk(msg);
+        break;
+
+      case 'stroke_end':
+        this.onStrokeEnd(msg);
         break;
 
       case 'stroke_move':
@@ -340,21 +352,38 @@ class WebRTCManager {
     }
     const pc = peerData.pc;
 
-    if (signal.sdp) {
-      await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-      if (signal.sdp.type === 'offer') {
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        this.sendSignal(senderId, {
-          sdp: pc.localDescription,
-        });
+    try {
+      if (signal.sdp) {
+        const description = new RTCSessionDescription(signal.sdp);
+        const offerCollision = description.type === "offer" &&
+          (pc.signalingState !== "stable");
+
+        if (offerCollision) {
+          const isPolite = this.userId < senderId;
+          if (!isPolite) {
+            console.log(`Ignoring colliding offer from ${senderId}`);
+            return;
+          }
+          await pc.setLocalDescription({ type: "rollback" });
+        }
+
+        await pc.setRemoteDescription(description);
+        if (description.type === 'offer') {
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          this.sendSignal(senderId, {
+            sdp: pc.localDescription,
+          });
+        }
+      } else if (signal.candidate) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+        } catch (e) {
+          console.warn('ICE candidate add error:', e);
+        }
       }
-    } else if (signal.candidate) {
-      try {
-        await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
-      } catch (e) {
-        console.warn('ICE candidate add error:', e);
-      }
+    } catch (e) {
+      console.error(`Signaling error with peer ${senderId}:`, e);
     }
   }
 

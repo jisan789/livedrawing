@@ -233,6 +233,35 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.clearBoard();
         showToast('Board cleared');
       },
+
+      onStrokeStart: (msg) => {
+        if (canvas && msg.stroke && msg.user_id !== currentUserId) {
+          canvas.handleRemoteStrokeStart({
+            strokeId: msg.stroke.id,
+            userId: msg.user_id,
+            tool: msg.stroke.tool,
+            color: msg.stroke.color,
+            size: msg.stroke.size,
+            point: [msg.stroke.x, msg.stroke.y],
+          });
+        }
+      },
+
+      onStrokeChunk: (msg) => {
+        if (canvas && msg.user_id !== currentUserId) {
+          canvas.handleRemoteStrokeChunk({
+            strokeId: msg.stroke_id,
+            seq: msg.seq,
+            points: msg.points,
+          });
+        }
+      },
+
+      onStrokeEnd: (msg) => {
+        if (canvas && msg.user_id !== currentUserId) {
+          canvas.handleRemoteStrokeEnd(msg.stroke_id);
+        }
+      },
     });
 
     // Initialize Canvas Engine

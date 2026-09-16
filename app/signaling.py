@@ -226,17 +226,52 @@ class SignalingHub:
                         x=s.get("x", 0),
                         y=s.get("y", 0),
                     )
+                    start_msg = json.dumps({
+                        "type": "stroke_start",
+                        "user_id": current_sender_id,
+                        "stroke": s,
+                    })
+                    for pid, p in self.active_peers.items():
+                        if pid != current_sender_id:
+                            try:
+                                await p.websocket.send_text(start_msg)
+                            except Exception:
+                                pass
 
             elif mtype == "stroke_chunk":
                 sid = msg.get("stroke_id")
                 points = msg.get("points", [])
                 if sid and points:
                     board_state.append_points(sid, points)
+                    chunk_msg = json.dumps({
+                        "type": "stroke_chunk",
+                        "user_id": current_sender_id,
+                        "stroke_id": sid,
+                        "seq": msg.get("seq", 0),
+                        "points": points,
+                    })
+                    for pid, p in self.active_peers.items():
+                        if pid != current_sender_id:
+                            try:
+                                await p.websocket.send_text(chunk_msg)
+                            except Exception:
+                                pass
 
             elif mtype == "stroke_end":
                 sid = msg.get("stroke_id")
                 if sid:
                     board_state.end_stroke(sid)
+                    end_msg = json.dumps({
+                        "type": "stroke_end",
+                        "user_id": current_sender_id,
+                        "stroke_id": sid,
+                    })
+                    for pid, p in self.active_peers.items():
+                        if pid != current_sender_id:
+                            try:
+                                await p.websocket.send_text(end_msg)
+                            except Exception:
+                                pass
 
             elif mtype == "stroke_move":
                 sid = msg.get("stroke_id")

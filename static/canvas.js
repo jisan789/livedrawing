@@ -958,6 +958,9 @@ class DrawingCanvas {
   // =========================================================================
 
   handleRemoteStrokeStart(data) {
+    if (this.remoteActiveStrokes.has(data.strokeId) || this.committedStrokes.has(data.strokeId)) {
+      return;
+    }
     const stroke = {
       id: data.strokeId,
       userId: data.userId,
@@ -980,6 +983,7 @@ class DrawingCanvas {
 
     let prev = stroke.lastPoint;
     for (const pt of data.points) {
+      if (prev && pt[0] === prev[0] && pt[1] === prev[1]) continue;
       stroke.points.push(pt);
       const [p1x, p1y] = this.toScreen(prev[0], prev[1]);
       const [p2x, p2y] = this.toScreen(pt[0], pt[1]);
@@ -993,13 +997,17 @@ class DrawingCanvas {
     const stroke = this.remoteActiveStrokes.get(strokeId);
     if (stroke) {
       this.remoteActiveStrokes.delete(strokeId);
-      stroke.undone = false;
-      this.committedStrokes.set(stroke.id, stroke);
-      this.strokeOrder.push(stroke.id);
-      
-      this.renderStrokeToBase(stroke);
-      this.clearActiveCanvas();
-      this.renderAllActiveStrokes();
+      if (!this.committedStrokes.has(strokeId)) {
+        stroke.undone = false;
+        this.committedStrokes.set(stroke.id, stroke);
+        if (!this.strokeOrder.includes(stroke.id)) {
+          this.strokeOrder.push(stroke.id);
+        }
+        
+        this.renderStrokeToBase(stroke);
+        this.clearActiveCanvas();
+        this.renderAllActiveStrokes();
+      }
     }
   }
 
