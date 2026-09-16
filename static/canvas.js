@@ -1354,8 +1354,17 @@ class DrawingCanvas {
   }
 
   loadSnapshot(strokesList) {
+    // Preserve local user's strokes so they are never wiped on reconnect
+    const localStrokes = new Map();
+    for (const [sid, stroke] of this.committedStrokes.entries()) {
+      if (stroke.userId === this.userId || stroke.userId === 'ME') {
+        localStrokes.set(sid, stroke);
+      }
+    }
+
     this.committedStrokes.clear();
     this.strokeOrder = [];
+
     if (Array.isArray(strokesList)) {
       for (const s of strokesList) {
         const strokeObj = {
@@ -1371,6 +1380,15 @@ class DrawingCanvas {
         this.strokeOrder.push(strokeObj.id);
       }
     }
+
+    // Merge back any local strokes missing from server snapshot
+    for (const [sid, stroke] of localStrokes.entries()) {
+      if (!this.committedStrokes.has(sid)) {
+        this.committedStrokes.set(sid, stroke);
+        this.strokeOrder.push(sid);
+      }
+    }
+
     this.redrawAll();
   }
 

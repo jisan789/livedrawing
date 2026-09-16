@@ -36,6 +36,7 @@ class WebRTCManager {
     this.onChatMessage = options.onChatMessage || (() => {});
     this.onInvalidPin = options.onInvalidPin || (() => {});
 
+    this.offlineQueue = [];
     this.init();
   }
 
@@ -50,12 +51,35 @@ class WebRTCManager {
       this.iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
     }
 
-    // 2. Connect WebSocket for signaling
+    // 2. Connect WebSocket for signaling & setup visibility keep-alive
     this.connectSignaling();
+    this.setupVisibilityHandler();
     this.startPingLoop();
   }
 
+  setupVisibilityHandler() {
+    const checkAndReconnect = () => {
+      if (document.visibilityState === 'visible' || document.hasFocus()) {
+        if (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING) {
+          console.log('Tab visible / focused — reconnecting WebSocket immediately...');
+          this.connectSignaling();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', checkAndReconnect);
+    window.addEventListener('focus', checkAndReconnect);
+    window.addEventListener('online', checkAndReconnect);
+  }
+
   connectSignaling() {
+    if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) {
+      return;
+    }
+    if (this.ws) {
+      try { this.ws.close(); } catch (_) {}
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     let wsUrl = `${protocol}//${window.location.host}/ws`;
     const params = [];
@@ -75,6 +99,16 @@ class WebRTCManager {
     this.ws.onopen = () => {
       this.isConnected = true;
       console.log('Connected to signaling server');
+
+      // Flush queued offline messages
+      if (this.offlineQueue.length > 0) {
+        console.log(`Flushing ${this.offlineQueue.length} queued offline messages...`);
+        const queue = [...this.offlineQueue];
+        this.offlineQueue = [];
+        for (const msg of queue) {
+          this.sendServerMessage(msg);
+        }
+      }
     };
 
     this.ws.onmessage = async (event) => {
@@ -100,8 +134,12 @@ class WebRTCManager {
         this.onInvalidPin();
         return;
       }
-      console.warn('Signaling WebSocket closed. Reconnecting in 2s...');
-      setTimeout(() => this.connectSignaling(), 2000);
+      console.warn('Signaling WebSocket closed. Reconnecting...');
+      setTimeout(() => {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+          this.connectSignaling();
+        }
+      }, 1000);
     };
 
     this.ws.onerror = (err) => {
@@ -367,6 +405,13 @@ class WebRTCManager {
       const str = JSON.stringify(msgObj);
       this.trackSent(str.length);
       this.ws.send(str);
+    } else {
+      console.warn(`WebSocket not connected. Queuing server message type: ${msgObj.type}`);
+      this.offlineQueue.push(msgObj);
+      // Attempt reconnect if closed
+      if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
+        this.connectSignaling();
+      }
     }
   }
 
