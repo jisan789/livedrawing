@@ -61,6 +61,10 @@ def get_ice_servers() -> List[Dict[str, Any]]:
 
     return ice_servers
 
+@app.get("/ping")
+async def ping():
+    return {"status": "pong", "message": "alive"}
+
 @app.get("/health")
 async def health_check():
     stats = board_state.get_stats()
