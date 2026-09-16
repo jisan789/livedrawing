@@ -70,13 +70,20 @@ document.addEventListener('DOMContentLoaded', () => {
   // Username & LocalStorage Management
   // =========================================================================
 
+  function cleanBaseName(name) {
+    if (!name) return 'Artist';
+    const cleaned = name.trim().replace(/(_\d+)+$/, '');
+    return cleaned || name.trim() || 'Artist';
+  }
+
   let savedUsername = localStorage.getItem('livedraw_username');
 
   function initApp(chosenName) {
     if (net) return;
 
     currentUserId = chosenName || generateRandomName();
-    myUserIdDisplay.textContent = `YOU (${currentUserId})`;
+    myUserIdDisplay.textContent = 'YOU';
+    myUserIdDisplay.title = `Display name: ${currentUserId}`;
 
     // Initialize WebRTC Manager
     net = new WebRTCManager({
@@ -85,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
       onWelcome: (msg) => {
         currentUserId = msg.user_id;
         currentUserColor = msg.color;
-        localStorage.setItem('livedraw_username', currentUserId);
+        localStorage.setItem('livedraw_username', cleanBaseName(currentUserId));
         myUserIdDisplay.textContent = 'YOU';
         myUserIdDisplay.title = `Display name: ${currentUserId}`;
         myUserDot.style.backgroundColor = currentUserColor;
@@ -102,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       onUsernameConfirmed: (confirmedName) => {
         currentUserId = confirmedName;
-        localStorage.setItem('livedraw_username', currentUserId);
+        localStorage.setItem('livedraw_username', cleanBaseName(currentUserId));
         myUserIdDisplay.textContent = 'YOU';
         myUserIdDisplay.title = `Display name: ${currentUserId}`;
         if (canvas) canvas.userId = currentUserId;
@@ -284,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
       nameModalTitle.textContent = 'Change Display Name';
       nameModalSubtitle.textContent = 'Enter your new nickname:';
       btnSaveName.textContent = 'Update Name';
-      usernameInput.value = currentUserId;
+      usernameInput.value = cleanBaseName(currentUserId);
     } else {
       nameModalTitle.textContent = 'Welcome to LiveDraw';
       nameModalSubtitle.textContent = 'Choose your display name for this board:';
@@ -292,7 +299,10 @@ document.addEventListener('DOMContentLoaded', () => {
       usernameInput.value = generateRandomName();
     }
     nameModal.classList.remove('hidden');
-    setTimeout(() => usernameInput.focus(), 150);
+    setTimeout(() => {
+      usernameInput.focus();
+      usernameInput.select();
+    }, 150);
   }
 
   function hideNameModal() {
@@ -305,8 +315,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   nameForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    const entered = usernameInput.value.trim() || generateRandomName();
+    const rawVal = usernameInput.value.trim();
+    const entered = cleanBaseName(rawVal || generateRandomName());
     hideNameModal();
+
+    localStorage.setItem('livedraw_username', entered);
 
     if (!net) {
       initApp(entered);
@@ -319,8 +332,9 @@ document.addEventListener('DOMContentLoaded', () => {
     showNameModal(true);
   });
 
+  const initialName = cleanBaseName(savedUsername);
   if (savedUsername && savedUsername.trim()) {
-    initApp(savedUsername.trim());
+    initApp(initialName);
   } else {
     showNameModal(false);
   }

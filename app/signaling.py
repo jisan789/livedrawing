@@ -4,10 +4,12 @@ Manages connected peers, unique usernames, forwards SDP offers/answers, ICE cand
 """
 
 from fastapi import WebSocket, WebSocketDisconnect
+from starlette.websockets import WebSocketState
 from typing import Dict, List, Any, Optional
 import json
 import secrets
 import logging
+import re
 from app.state import board_state
 
 logger = logging.getLogger("livedraw.signaling")
@@ -31,22 +33,47 @@ class SignalingHub:
     def get_peer_count(self) -> int:
         return len(self.active_peers)
 
+    def clean_base_name(self, name: str) -> str:
+        """Strips repeating numerical suffixes like _2_2_2 down to base name."""
+        stripped = re.sub(r'(_\d+)+$', '', name.strip())
+        return stripped if stripped else name.strip()
+
     def ensure_unique_name(self, requested_name: Optional[str], exclude_id: Optional[str] = None) -> str:
-        """Ensures a unique, clean username among active peers."""
+        """Ensures a unique, clean username among active peers without cascading suffixes."""
+        # Prune any dead or closing websocket peers first
+        stale_peers = []
+        for pid, p in self.active_peers.items():
+            if pid != exclude_id:
+                try:
+                    if hasattr(p.websocket, "client_state") and p.websocket.client_state != WebSocketState.CONNECTED:
+                        stale_peers.append(pid)
+                except Exception:
+                    pass
+        for pid in stale_peers:
+            if pid in self.active_peers:
+                del self.active_peers[pid]
+
         if not requested_name or not requested_name.strip():
             while True:
                 candidate = f"Artist_{secrets.token_hex(2).upper()}"
                 if candidate not in self.active_peers and candidate != exclude_id:
                     return candidate
 
-        clean_name = requested_name.strip()[:20]
-        if clean_name not in self.active_peers or clean_name == exclude_id:
-            return clean_name
+        raw_name = requested_name.strip()[:20]
+        base_name = self.clean_base_name(raw_name)
 
-        # If taken, append incremental suffix
+        # 1. Prefer clean base name if it is available or held by this user
+        if base_name not in self.active_peers or base_name == exclude_id:
+            return base_name
+
+        # 2. If base name is held by another peer, check requested raw name
+        if raw_name not in self.active_peers or raw_name == exclude_id:
+            return raw_name
+
+        # 3. If taken, find lowest available numeric suffix on the base name (e.g. PC_2, PC_3)
         suffix = 2
         while True:
-            candidate = f"{clean_name}_{suffix}"
+            candidate = f"{base_name}_{suffix}"
             if candidate not in self.active_peers and candidate != exclude_id:
                 return candidate
             suffix += 1
